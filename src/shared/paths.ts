@@ -50,3 +50,14 @@ export function validateName(name: string): string | null {
   if (name === '.' || name === '..') return 'Nome inválido.'
   return null
 }
+
+const IMAGE_MIME: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  bmp: 'image/bmp', ico: 'image/x-icon', avif: 'image/avif', svg: 'image/svg+xml'
+}
+
+/** MIME de uma imagem que o visualizador sabe exibir, ou null para outros arquivos. */
+export function imageMime(name: string): string | null {
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? (IMAGE_MIME[name.slice(dot + 1).toLowerCase()] ?? null) : null
+}

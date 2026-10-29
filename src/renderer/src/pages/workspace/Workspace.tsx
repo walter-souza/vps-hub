@@ -1,6 +1,6 @@
-import { ArrowLeft, ArrowLeftRight, ChevronDown, FolderOpen, Plus, SquareTerminal, WifiOff, X } from 'lucide-react'
+import { ArrowLeft, ArrowLeftRight, ChevronDown, FileImage, FolderOpen, Plus, SquareTerminal, WifiOff, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { baseName } from '../../../../shared/paths'
+import { baseName, imageMime } from '../../../../shared/paths'
 import { Button } from '../../components/ui'
 import { api, errCode, errMsg } from '../../lib/api'
 import { connectVps } from '../../lib/connect'
@@ -9,6 +9,7 @@ import { disposeModel } from '../../lib/monaco'
 import { toast, useApp } from '../../lib/store'
 import { EditorView, type OpenFile } from './EditorView'
 import { Explorer } from './Explorer'
+import { ImageView } from './ImageView'
 import { TerminalView } from './TerminalView'
 import { Transfers } from './Transfers'
 
@@ -20,6 +21,7 @@ interface TermTab {
 
 const EXPLORER = 'explorer'
 const TRANSFERS = 'transfers'
+const imageTab = (path: string) => `img:${path}`
 
 export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   const session = useApp((s) => s.sessions[id])
@@ -31,6 +33,7 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   const [files, setFiles] = useState<OpenFile[]>([])
   const filesRef = useRef(files)
   filesRef.current = files
+  const [images, setImages] = useState<string[]>([])
   const [tab, setTab] = useState(EXPLORER)
   const [terms, setTerms] = useState<TermTab[]>([])
   const termSeq = useRef(0)
@@ -49,7 +52,11 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
     setFiles((fs) => fs.map((f) => (f.path === path ? { ...f, ...patch } : f)))
 
   const openFile = useCallback(
-    async (path: string, line?: number) => {
+    async (path: string, line?: number, asText = false) => {
+      if (!asText && imageMime(baseName(path))) {
+        setImages((is) => (is.includes(path) ? is : [...is, path]))
+        return setTab(imageTab(path))
+      }
       // seq muda a cada pedido, para rolar de novo mesmo que a linha seja a mesma.
       const reveal = line ? { line, seq: Date.now() } : undefined
       if (filesRef.current.some((f) => f.path === path)) {
@@ -108,6 +115,11 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
     setFiles(rest)
     disposeModel(id, path)
     if (tab === path) setTab(rest.at(-1)?.path ?? EXPLORER)
+  }
+
+  const closeImage = (path: string) => {
+    setImages((is) => is.filter((p) => p !== path))
+    if (tab === imageTab(path)) setTab(EXPLORER)
   }
 
   const openTerminal = useCallback((cwd: string) => {
@@ -172,6 +184,17 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onClose={() => closeFile(f.path)}
             />
           ))}
+          {images.map((p) => (
+            <Tab
+              key={p}
+              active={tab === imageTab(p)}
+              onClick={() => setTab(imageTab(p))}
+              icon={<FileImage size={13} />}
+              label={baseName(p)}
+              title={p}
+              onClose={() => closeImage(p)}
+            />
+          ))}
         </div>
         <div className="flex-1" />
         <Button
@@ -219,6 +242,11 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onReload={() => reloadFile(f.path)}
               onRevealed={() => patchFile(f.path, { reveal: undefined })}
             />
+          ))}
+        {images
+          .filter((p) => imageTab(p) === tab)
+          .map((p) => (
+            <ImageView key={p} vpsId={id} path={p} onViewAsText={() => openFile(p, undefined, true)} />
           ))}
       </main>
 

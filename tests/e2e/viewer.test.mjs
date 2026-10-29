@@ -1,0 +1,65 @@
+// Visualizador de imagens: abrir, zoom, SVG sem executar script, limite de tamanho.
+import assert from 'node:assert/strict'
+import { after, before, test } from 'node:test'
+import { dockerSh, fileList, launchApp, saveConnection, state } from './helpers.mjs'
+
+const S = state()
+const A = S.a
+const DIR = '/config/viewer'
+const sh = (cmd) => dockerSh(A.name, cmd)
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+let app, win, errors
+
+const row = (name) => fileList(win).locator(`[data-path="${DIR}/${name}"] [data-name-cell]`)
+
+before(async () => {
+  sh(`rm -rf ${DIR} && mkdir -p ${DIR} && cd ${DIR} && echo ${PNG} | base64 -d > pixel.png`)
+  sh(`cd ${DIR} && echo '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><script>window.__pwned=1</script><rect width="40" height="20"/></svg>' > logo.svg`)
+  sh(`cd ${DIR} && head -c 26214500 /dev/zero > enorme.png && echo 'nao e imagem' > falso.txt`)
+  const first = await launchApp()
+  await saveConnection(first.win, { name: 'Viewer', port: A.port, initialPath: DIR, secret: S.password })
+  await first.app.close()
+  ;({ app, win, errors } = await launchApp({ userData: first.userData }))
+  await win.getByRole('button', { name: 'Conectar' }).click()
+  await fileList(win, DIR).waitFor({ timeout: 30_000 })
+})
+after(async () => {
+  await app?.close()
+  assert.deepEqual(errors, [], 'erros no console do renderer')
+})
+
+test('duplo clique numa imagem abre o visualizador com dimensões e tamanho', async () => {
+  await row('pixel.png').dblclick()
+  await win.getByRole('tab', { name: /pixel\.png/ }).waitFor()
+  await win.getByText('1 × 1 px').waitFor()
+  assert.equal(await win.locator('img[alt="pixel.png"]').evaluate((el) => el.naturalWidth), 1)
+  assert.equal(await win.locator('.monaco-editor').count(), 0, 'não abriu o editor')
+})
+
+test('zoom: 100% define o tamanho real e ajustar volta', async () => {
+  await win.getByRole('button', { name: '100%' }).click()
+  await win.getByLabel('Zoom').filter({ hasText: '100%' }).waitFor()
+  await win.getByRole('button', { name: 'Aumentar zoom' }).click()
+  await win.getByLabel('Zoom').filter({ hasText: '125%' }).waitFor()
+  await win.getByRole('button', { name: 'Ajustar à janela' }).click()
+  await win.getByLabel('Zoom').filter({ hasText: 'Ajustar' }).waitFor()
+})
+
+test('SVG é exibido como imagem, sem executar script, e "Ver código" abre o editor', async () => {
+  await win.getByRole('tab', { name: 'Arquivos' }).click()
+  await row('logo.svg').dblclick()
+  await win.getByText('40 × 20 px').waitFor()
+  assert.equal(await win.evaluate(() => window.__pwned), undefined, 'script do SVG não pode rodar')
+  await win.getByRole('button', { name: 'Ver código' }).click()
+  await win.locator('.monaco-editor').first().waitFor()
+  await win.getByRole('tab', { name: /logo\.svg/ }).first().waitFor()
+})
+
+test('imagem acima do limite mostra erro; arquivo comum continua indo para o editor', async () => {
+  await win.getByRole('tab', { name: 'Arquivos' }).click()
+  await row('enorme.png').dblclick()
+  await win.getByRole('alert').filter({ hasText: 'máx. 25 MB' }).waitFor({ timeout: 30_000 })
+  await win.getByRole('tab', { name: 'Arquivos' }).click()
+  await row('falso.txt').dblclick()
+  await win.getByRole('tab', { name: /falso\.txt/ }).waitFor()
+})

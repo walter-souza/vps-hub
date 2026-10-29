@@ -146,6 +146,11 @@ export interface FileContent {
   mtime: number
 }
 
+export interface BinaryContent {
+  data: Uint8Array
+  mime: string
+}
+
 export interface TransferEvent {
   id: string
   vpsId: string
@@ -185,6 +190,8 @@ export interface VpsApi {
   fs: {
     list(id: string, path: string): Promise<FileEntry[]>
     read(id: string, path: string): Promise<FileContent>
+    /** Lê uma imagem (só tipos conhecidos, até 25 MB) para o visualizador. */
+    readImage(id: string, path: string): Promise<BinaryContent>
     /** expectedMtime null = sobrescrever sem checar conflito. Retorna o novo mtime. */
     write(id: string, path: string, content: string, expectedMtime: number | null): Promise<number>
     createFile(id: string, path: string): Promise<void>

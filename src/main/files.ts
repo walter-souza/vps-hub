@@ -6,8 +6,8 @@ import { Transform, type Readable, type Writable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { basename, extname, join } from 'node:path'
 import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2'
-import { baseName, joinPath, normalizePath, parentPath } from '../shared/paths'
-import type { FileContent, FileEntry, TransferEvent } from '../shared/types'
+import { baseName, imageMime, joinPath, normalizePath, parentPath } from '../shared/paths'
+import type { BinaryContent, FileContent, FileEntry, TransferEvent } from '../shared/types'
 import { AppError, toAppError } from './errors'
 import { emit } from './events'
 import { getSession, type Session } from './sessions'
@@ -20,6 +20,7 @@ export function call<T = void>(fn: (cb: Cb<T>) => void): Promise<T> {
 
 const noop = () => {}
 const MAX_EDIT_BYTES = 5 * 1024 * 1024
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024
 
 export function remotePath(p: unknown): string {
   if (typeof p !== 'string' || !p.startsWith('/') || p.includes('\0')) throw new AppError('Caminho inválido.')
@@ -92,6 +93,17 @@ export async function read(id: string, p: string): Promise<FileContent> {
     throw new AppError('O arquivo não está em UTF-8; editá-lo poderia corromper o conteúdo. Use "Baixar".')
   }
   return { content, mtime: st.mtime }
+}
+
+export async function readImage(id: string, p: string): Promise<BinaryContent> {
+  const { sftp } = getSession(id)
+  const path = remotePath(p)
+  const mime = imageMime(baseName(path))
+  if (!mime) throw new AppError('Tipo de imagem não suportado pelo visualizador.')
+  const st = await call<Stats>((cb) => sftp.stat(path, cb))
+  if (st.isDirectory()) throw new AppError('Não é possível abrir uma pasta como imagem.')
+  if (st.size > MAX_IMAGE_BYTES) throw new AppError('Imagem grande demais para o visualizador (máx. 25 MB). Use "Baixar".')
+  return { data: new Uint8Array(await call<Buffer>((cb) => sftp.readFile(path, cb))), mime }
 }
 
 /** Grava em arquivo temporário e renomeia por cima; retorna false quando isso não é possível. */

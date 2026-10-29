@@ -66,6 +66,7 @@ export function registerIpc(): void {
   handle('fs:search', search)
   handle('fs:cancelSearch', cancelSearch)
   handle('fs:pickUpload', files.pickUpload)
+  handle('fs:readImage', files.readImage)
   handle('fs:upload', files.upload)
   handle('fs:download', files.download)
   handle('fs:revealLocal', files.revealLocal)
