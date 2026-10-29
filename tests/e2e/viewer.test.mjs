@@ -63,3 +63,31 @@ test('imagem acima do limite mostra erro; arquivo comum continua indo para o edi
   await row('falso.txt').dblclick()
   await win.getByRole('tab', { name: /falso\.txt/ }).waitFor()
 })
+
+// ---------- Markdown ----------
+test('Markdown abre com pré-visualização ao lado, atualizada ao digitar e sem HTML perigoso', async () => {
+  sh(`cd ${DIR} && printf '# Titulo\n\n- [ ] tarefa\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n<script>window.__md=1</script><img src=x onerror="window.__md=2">\n\n[site](https://example.com)\n' > LEIAME.md`)
+  await win.getByRole('tab', { name: 'Arquivos' }).click()
+  await win.getByRole('button', { name: 'Atualizar (F5)' }).click()
+  await row('LEIAME.md').dblclick()
+  const preview = win.getByRole('document', { name: 'Pré-visualização' })
+  await preview.getByRole('heading', { name: 'Titulo' }).waitFor()
+  assert.equal(await preview.locator('table td').count(), 2, 'tabela GFM')
+  assert.equal(await preview.locator('input[type=checkbox]').count(), 1, 'lista de tarefas')
+  assert.equal(await preview.locator('script').count(), 0)
+  assert.equal(await win.evaluate(() => window.__md), undefined, 'script/onerror não podem rodar')
+
+  await win.locator('.monaco-editor').first().click()
+  await win.keyboard.press('Control+Home')
+  await win.keyboard.type('## Novo\n')
+  await preview.getByRole('heading', { name: 'Novo' }).waitFor()
+  await win.keyboard.press('Control+Z') // desfaz: arquivo sem alterações não bloqueia o fechamento do app
+  await preview.getByRole('heading', { name: 'Novo' }).waitFor({ state: 'detached' })
+  await win.locator('text=Não salvo').waitFor({ state: 'detached' })
+
+  await preview.getByRole('link', { name: 'site' }).click()
+  assert.ok(win.url().startsWith('file:'), 'clicar em link não navega a janela')
+
+  await win.getByRole('button', { name: 'Pré-visualizar' }).click()
+  await preview.waitFor({ state: 'detached' })
+})

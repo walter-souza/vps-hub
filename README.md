@@ -39,7 +39,7 @@ App desktop para Windows que reúne suas VPS num só lugar e deixa você **naveg
 
 ### Editor, terminal e transferências
 - **Visualizador de imagens** (png, jpg, gif, webp, bmp, ico, avif, svg até 25 MB): abre ao dar duplo clique, com zoom (roda do mouse, 100%, ajustar), arrastar para mover, fundo xadrez e dimensões. SVG é exibido só como imagem (scripts não rodam) e "Ver código" abre no editor.
-- **Editor Monaco** com abas e Ctrl+S. Detecta se o arquivo mudou no servidor antes de salvar, grava de forma atômica (temporário + rename) e recusa binários, arquivos não UTF-8 e acima de 5 MB.
+- **Editor Monaco** com abas e Ctrl+S. Arquivos Markdown (`.md`) abrem com **pré-visualização ao lado** (GFM: tabelas, listas de tarefas, código), atualizada enquanto você digita; o HTML é sanitizado e links não navegam. Detecta se o arquivo mudou no servidor antes de salvar, grava de forma atômica (temporário + rename) e recusa binários, arquivos não UTF-8 e acima de 5 MB.
 - **Terminal** (xterm.js) aberto na pasta atual, com várias abas.
 - **Upload e download** com progresso, inclusive de pastas. Cada transferência pode ser **cancelada** (o arquivo parcial é apagado) e **repetida** se falhar ou for cancelada.
 
@@ -75,7 +75,7 @@ npm run test:e2e   # testes de ponta a ponta (precisa do Docker Desktop rodando)
 
 ### Testes
 
-`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda **88 cenários**: conexão e host key, explorador, editor, transferências (cancelar e repetir), terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar entre VPS, seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
+`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda **89 cenários**: conexão e host key, explorador, editor, transferências (cancelar e repetir), terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar entre VPS, seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
 
 Para rodar só uma suíte (depois de `npm run build`):
 
