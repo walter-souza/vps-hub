@@ -1,5 +1,5 @@
 import { archiveInfo, baseName, joinPath, parentPath, type ArchiveKind } from '../shared/paths'
-import type { ArchiveFormat, ExtractMode } from '../shared/types'
+import type { ArchiveFormat, ArchiveTool, ExtractMode, ToolInstallInfo } from '../shared/types'
 import { AppError } from './errors'
 import { remotePath, statOrNull } from './files'
 import { exec, getSession, sh, shellQuote as q, type Session } from './sessions'
@@ -8,11 +8,60 @@ import { moveToTrash } from './trash'
 /** Flag de compressão do tar por tipo de arquivo. */
 const TAR_FLAG = { tar: '', 'tar.gz': 'z', 'tar.bz2': 'j', 'tar.xz': 'J' } as const
 
-async function requireTool(s: Session, tool: 'zip' | 'unzip'): Promise<void> {
+async function requireTool(s: Session, tool: ArchiveTool): Promise<void> {
   const { code } = await exec(s.client, `command -v ${tool} >/dev/null 2>&1`)
-  if (code !== 0) {
-    throw new AppError(`O comando "${tool}" não está instalado na VPS. Instale com "apt install ${tool}" (Debian/Ubuntu) ou use .tar.gz.`, 'MISSING_TOOL')
+  if (code !== 0) throw new AppError(`O comando "${tool}" não está instalado na VPS.`, 'MISSING_TOOL')
+}
+
+const TOOLS: ArchiveTool[] = ['zip', 'unzip']
+const MANAGERS: Record<string, (pkg: string) => string> = {
+  'apt-get': (p) => `apt-get install -y ${p}`,
+  dnf: (p) => `dnf install -y ${p}`,
+  yum: (p) => `yum install -y ${p}`,
+  apk: (p) => `apk add --no-cache ${p}`,
+  pacman: (p) => `pacman -S --noconfirm ${p}`,
+  zypper: (p) => `zypper --non-interactive install ${p}`
+}
+
+/** Detecta o gerenciador de pacotes e se a sessão pode instalar (root ou sudo sem senha). */
+async function installPlan(s: Session, tool: ArchiveTool) {
+  if (!TOOLS.includes(tool)) throw new AppError('Ferramenta inválida.')
+  const { stdout } = await exec(
+    s.client,
+    `for m in ${Object.keys(MANAGERS).join(' ')}; do command -v $m >/dev/null 2>&1 && { echo $m; break; }; done; ` +
+      `if [ "$(id -u)" = 0 ]; then echo root; elif sudo -n true 2>/dev/null; then echo sudo; else echo none; fi`
+  )
+  const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+  const privilege = lines.pop() as 'root' | 'sudo' | 'none'
+  const manager = lines[0] && MANAGERS[lines[0]] ? lines[0] : null
+  const sudo = privilege === 'sudo' ? 'sudo -n ' : ''
+  return { manager, privilege, sudo, base: manager ? MANAGERS[manager](tool) : null }
+}
+
+export async function toolInstallInfo(id: string, tool: ArchiveTool): Promise<ToolInstallInfo> {
+  const { manager, privilege, base } = await installPlan(getSession(id), tool)
+  if (!manager || !base) return { command: null, canInstall: false, reason: 'Gerenciador de pacotes não reconhecido; instale manualmente.' }
+  const command = `${privilege === 'sudo' ? 'sudo ' : ''}${base}`
+  if (privilege === 'none') {
+    return { command: `sudo ${base}`, canInstall: false, reason: 'Instalar pacotes exige root ou sudo sem senha. Rode o comando no terminal ou conecte como root.' }
   }
+  return { command, canInstall: true }
+}
+
+/** Instala zip/unzip pelo gerenciador de pacotes da VPS. */
+export async function installTool(id: string, tool: ArchiveTool): Promise<void> {
+  const s = getSession(id)
+  const { manager, privilege, sudo, base } = await installPlan(s, tool)
+  if (!manager || !base || privilege === 'none') throw new AppError('Esta sessão não pode instalar pacotes (precisa de root ou sudo sem senha).')
+  // apt: sem perguntas; se o índice de pacotes estiver vazio/velho, atualiza e tenta de novo.
+  const run = manager === 'apt-get' ? `${sudo}env DEBIAN_FRONTEND=noninteractive ${base}` : `${sudo}${base}`
+  const cmd = manager === 'apt-get' ? `${run} || (${sudo}apt-get update -q && ${run})` : run
+  const { code, stdout, stderr } = await exec(s.client, `${cmd} 2>&1`)
+  if (code !== 0) {
+    const tail = (stderr || stdout).trim().split('\n').slice(-6).join('\n')
+    throw new AppError(`Falha ao instalar ${tool}:\n${tail}`)
+  }
+  await requireTool(s, tool)
 }
 
 /** Compacta itens de uma mesma pasta em <pasta>/<name>. Retorna o caminho do arquivo criado. */

@@ -66,6 +66,16 @@ export interface TrashItem {
 export type PasteMode = 'copy' | 'cut'
 
 export type ArchiveFormat = 'zip' | 'tar.gz'
+/** Ferramentas externas que o .zip exige na VPS. */
+export type ArchiveTool = 'zip' | 'unzip'
+
+export interface ToolInstallInfo {
+  /** Comando que instala a ferramenta (exibido ao usuário); null se o gerenciador não for reconhecido. */
+  command: string | null
+  /** A sessão pode instalar sozinha (root ou sudo sem senha). */
+  canInstall: boolean
+  reason?: string
+}
 /** folder = extrai numa pasta nova com o nome do arquivo; here = na própria pasta do arquivo. */
 export type ExtractMode = 'folder' | 'here'
 
@@ -192,6 +202,8 @@ export interface VpsApi {
     compress(id: string, paths: string[], format: ArchiveFormat, name: string): Promise<string>
     /** Extrai; com replace, itens que seriam sobrescritos vão para a lixeira. Retorna os caminhos criados. */
     extract(id: string, archive: string, mode: ExtractMode, replace: boolean): Promise<string[]>
+    toolInstallInfo(id: string, tool: ArchiveTool): Promise<ToolInstallInfo>
+    installTool(id: string, tool: ArchiveTool): Promise<void>
     pickUpload(): Promise<string[]>
     upload(id: string, localPaths: string[], remoteDir: string): Promise<void>
     /** Pergunta a pasta local de destino; retorna null se cancelado. */

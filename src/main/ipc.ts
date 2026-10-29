@@ -7,7 +7,7 @@ import * as files from './files'
 import { connectSession, disconnect, probe, testConnection } from './sessions'
 import { readSshConfig } from './sshConfig'
 import { store } from './store'
-import { compress, extract } from './archive'
+import { compress, extract, installTool, toolInstallInfo } from './archive'
 import { paste } from './paste'
 import { accounts, changePermissions } from './perms'
 import { cancelSearch, search } from './search'
@@ -59,6 +59,8 @@ export function registerIpc(): void {
   handle('fs:paste', paste)
   handle('fs:compress', compress)
   handle('fs:extract', extract)
+  handle('fs:toolInstallInfo', toolInstallInfo)
+  handle('fs:installTool', installTool)
   handle('fs:setPermissions', changePermissions)
   handle('fs:accounts', accounts)
   handle('fs:search', search)

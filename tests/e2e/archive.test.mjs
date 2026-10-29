@@ -64,7 +64,7 @@ test('compacta uma pasta em .tar.gz pelo diálogo', async () => {
   assert.match(sh(`tar -tzf ${DIR}/site.tar.gz`), /site\/css\/s\.css/)
 })
 
-test('sem o "zip" na VPS, o diálogo explica como instalar', async () => {
+const openZipDialogForTwoFiles = async () => {
   await row('a.txt').click()
   await row('b.txt').click({ modifiers: ['Control'] })
   await row('b.txt').click({ button: 'right' })
@@ -72,10 +72,30 @@ test('sem o "zip" na VPS, o diálogo explica como instalar', async () => {
   assert.equal(await compressDialog().getByRole('textbox').inputValue(), 'arq.zip', 'vários itens usam o nome da pasta')
   await compressDialog().getByRole('button', { name: 'Compactar' }).click()
   await compressDialog().getByText(/"zip" não está instalado na VPS/).waitFor()
-  sh('apk add --no-cache zip >/dev/null', '0')
-  await compressDialog().getByRole('button', { name: 'Compactar' }).click()
-  await row('arq.zip').waitFor()
-  assert.equal(sh(`unzip -l ${DIR}/arq.zip | grep -c "[ab].txt"`), '2')
+  return compressDialog().getByRole('region', { name: 'Instalar zip' })
+}
+
+test('sem o "zip" e sem privilégio, o diálogo mostra o comando e não oferece instalar', async () => {
+  const box = await openZipDialogForTwoFiles()
+  await box.getByText('sudo apk add --no-cache zip').waitFor()
+  await box.getByText(/exige root ou sudo sem senha/).waitFor()
+  assert.equal(await box.getByRole('button', { name: 'Instalar agora' }).count(), 0)
+  await compressDialog().getByRole('button', { name: 'Cancelar' }).click()
+})
+
+test('com sudo sem senha, "Instalar agora" instala o zip e compacta em seguida', async () => {
+  sh('echo "dev ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/vpshub-e2e && chmod 440 /etc/sudoers.d/vpshub-e2e', '0')
+  try {
+    const box = await openZipDialogForTwoFiles()
+    await box.getByText('sudo apk add --no-cache zip').waitFor()
+    await screenshot(win, 'instalar-zip')
+    await box.getByRole('button', { name: 'Instalar agora' }).click()
+    await win.getByText('"zip" instalado na VPS.').waitFor({ timeout: 60_000 })
+    await row('arq.zip').waitFor()
+    assert.equal(sh(`unzip -l ${DIR}/arq.zip | grep -c "[ab].txt"`), '2')
+  } finally {
+    sh('rm -f /etc/sudoers.d/vpshub-e2e', '0')
+  }
 })
 
 test('extrai para uma pasta nova sem tocar no que existe (BusyBox unzip)', async () => {

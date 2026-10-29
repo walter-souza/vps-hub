@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { baseName, parentPath, validateName } from '../../../../shared/paths'
-import type { ArchiveFormat, FileEntry } from '../../../../shared/types'
+import type { ArchiveFormat, FileEntry, ToolInstallInfo } from '../../../../shared/types'
 import { Button, Field, Input, Modal } from '../../components/ui'
-import { api, errMsg } from '../../lib/api'
+import { api, errCode, errMsg } from '../../lib/api'
+import { toast } from '../../lib/store'
 
 interface Props {
   vpsId: string
@@ -29,9 +30,14 @@ export function CompressDialog({ vpsId, entries, onClose, onDone }: Props) {
   const [name, setName] = useState(`${suggestedStem(entries)}.zip`)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Preenchido quando falta o "zip" na VPS: comando de instalação e se dá para rodar daqui.
+  const [missing, setMissing] = useState<ToolInstallInfo | null>(null)
+  const [installing, setInstalling] = useState(false)
 
   // Trocar o formato troca a extensão do nome.
   const pickFormat = (f: ArchiveFormat) => {
+    setMissing(null)
+    setError(null)
     setName((n) => n.replace(/\.(zip|tar\.gz)$/i, '') + `.${f}`)
     setFormat(f)
   }
@@ -46,8 +52,27 @@ export function CompressDialog({ vpsId, entries, onClose, onDone }: Props) {
       onDone(path)
       onClose()
     } catch (e) {
+      if (errCode(e) === 'MISSING_TOOL') {
+        setMissing(await api.fs.toolInstallInfo(vpsId, 'zip').catch(() => ({ command: null, canInstall: false })))
+      }
       setError(errMsg(e))
       setBusy(false)
+    }
+  }
+
+  /** Instala o zip na VPS e, dando certo, compacta em seguida. */
+  const install = async () => {
+    setInstalling(true)
+    setError(null)
+    try {
+      await api.fs.installTool(vpsId, 'zip')
+      toast('success', '"zip" instalado na VPS.')
+      setMissing(null)
+      await submit()
+    } catch (e) {
+      setError(errMsg(e))
+    } finally {
+      setInstalling(false)
     }
   }
 
@@ -58,7 +83,7 @@ export function CompressDialog({ vpsId, entries, onClose, onDone }: Props) {
       footer={
         <>
           <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" onClick={submit} disabled={busy}>
+          <Button variant="primary" onClick={submit} disabled={busy || installing}>
             {busy ? 'Compactando…' : 'Compactar'}
           </Button>
         </>
@@ -93,6 +118,27 @@ export function CompressDialog({ vpsId, entries, onClose, onDone }: Props) {
         />
       </Field>
       {error && <p className="mt-2 text-xs whitespace-pre-line text-danger">{error}</p>}
+      {missing && (
+        <div className="mt-3 rounded-md border border-line bg-bg p-3 text-xs" role="region" aria-label="Instalar zip">
+          {missing.command && (
+            <>
+              <span className="text-muted">Comando de instalação:</span>
+              <code className="mt-1 block rounded bg-panel-2 px-2 py-1.5 font-mono text-[12px] select-text">{missing.command}</code>
+            </>
+          )}
+          {missing.reason && <p className="mt-2 text-muted">{missing.reason}</p>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {missing.canInstall && (
+              <Button size="sm" variant="primary" onClick={install} disabled={installing}>
+                {installing ? 'Instalando…' : 'Instalar agora'}
+              </Button>
+            )}
+            <Button size="sm" onClick={() => pickFormat('tar.gz')} disabled={installing}>
+              Usar .tar.gz
+            </Button>
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }
