@@ -1,5 +1,22 @@
+# Dependências e builds
 node_modules/
 out/
 dist/
-*.log
+
+# Capturas de tela geradas pelos testes E2E
 tests/e2e/.output/
+
+# Logs
+*.log
+
+# Ambiente e ferramentas locais
+.env
+.env.*
+.claude/
+.vscode/
+.idea/
+
+# Sistema operacional
+Thumbs.db
+Desktop.ini
+.DS_Store

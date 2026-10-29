@@ -2,6 +2,14 @@
   "name": "vps-hub",
   "version": "1.0.0",
   "description": "Hub de VPS com explorador de arquivos via SSH/SFTP",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/walter-souza/vps-hub.git"
+  },
+  "homepage": "https://github.com/walter-souza/vps-hub#readme",
+  "bugs": {
+    "url": "https://github.com/walter-souza/vps-hub/issues"
+  },
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -11,7 +19,6 @@
     "dist": "electron-vite build && electron-builder --win",
     "test:e2e": "electron-vite build && node --test --test-concurrency=1 --test-global-setup=tests/e2e/setup.mjs tests/e2e/core.test.mjs tests/e2e/archive.test.mjs tests/e2e/dnd.test.mjs tests/e2e/drop-files.test.mjs tests/e2e/import-trash.test.mjs tests/e2e/paste.test.mjs tests/e2e/perms.test.mjs tests/e2e/search.test.mjs tests/e2e/selection.test.mjs"
   },
-  "author": "",
   "type": "commonjs",
   "dependencies": {
     "ssh2": "^1.17.0"

@@ -1,0 +1,5 @@
+# Texto sempre com LF no repositório (o Git converte no checkout conforme a máquina).
+* text=auto eol=lf
+
+*.png binary
+*.ico binary

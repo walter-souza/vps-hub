@@ -1,62 +1,115 @@
 # VPS Hub
 
-App desktop (Electron) para gerenciar várias VPS e navegar pelos arquivos delas como no Explorer do Windows, via SSH/SFTP.
+App desktop para Windows que reúne suas VPS num só lugar e deixa você **navegar, editar e organizar os arquivos delas como no Explorer do Windows**, via SSH/SFTP, sem precisar decorar comandos no terminal.
 
-## Rodando
+![Explorador de arquivos com terminal integrado](docs/screenshots/explorer.png)
 
-```bash
-npm install
-npm run dev        # desenvolvimento (F12 abre o DevTools)
-npm run build      # build de produção em out/
-npm run dist       # instalador Windows em dist/ ("VPS Hub Setup <versão>.exe")
-npm run typecheck
-npm run test:e2e   # testes de ponta a ponta (precisa do Docker Desktop rodando)
-```
+## Destaques
 
-## Testes
+- **Hub de conexões**: cadastre várias VPS (senha ou chave SSH), teste antes de salvar, veja quem está online e importe os hosts do seu `~/.ssh/config`.
+- **Explorador como o do Windows**: seleção por retângulo, Ctrl/Shift, atalhos de teclado, **arrastar e soltar** para mover/copiar e **Desfazer**.
+- **Editor** (o mesmo do VS Code) e **terminal** integrados, abertos na pasta atual.
+- **Lixeira na própria VPS**: excluir é reversível.
+- **Busca** por nome e por conteúdo, **permissões e dono** com caixas de seleção, **compactar/extrair** zip e tar.
+- **Copiar e colar entre VPS diferentes.**
 
-`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda 82 cenários: conexão e host key, explorer, editor, transferências, terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar (inclusive entre VPS), seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e com GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
-
-O instalador não é assinado digitalmente, então o Windows SmartScreen pode avisar na primeira execução ("Mais informações" → "Executar assim mesmo").
+| Hub | Arrastar e soltar | Permissões |
+|---|---|---|
+| ![Hub de VPS](docs/screenshots/hub.png) | ![Arrastando arquivos para uma pasta](docs/screenshots/arrastar.png) | ![Diálogo de permissões e dono](docs/screenshots/permissoes.png) |
 
 ## Funcionalidades
 
-- **Hub**: cadastrar, editar, duplicar e excluir conexões; testar a conexão antes de salvar; status online/latência; filtro por tags e busca.
-- **Importar `~/.ssh/config`**: lista os hosts (respeitando `Host *`, `IdentityFile`, `Port`, `User`), marca os já cadastrados e avisa sobre ProxyJump, que ainda não é suportado.
-- **Autenticação**: senha ou chave privada (OpenSSH ou .ppk, com passphrase). Senhas e passphrases podem ser lembradas, criptografadas pelo Windows (DPAPI via `safeStorage`); se não estiverem salvas, o app pede na hora de conectar.
+### Conexões
+- **Hub**: cadastrar, editar, duplicar e excluir conexões; testar a conexão antes de salvar; status online e latência; tags e busca.
+- **Autenticação** por senha ou chave privada (OpenSSH ou `.ppk`, com passphrase). Senhas e passphrases podem ser lembradas, criptografadas pelo Windows (DPAPI); se não estiverem salvas, o app pede ao conectar. Se o servidor não aceitar o método escolhido (ex.: só chave), o app explica.
+- **Importar `~/.ssh/config`**: lê os hosts com as regras do OpenSSH (`Host *`, `IdentityFile`, `Port`, `User`), marca os já cadastrados e avisa sobre `ProxyJump`, ainda não suportado.
 - **Host key**: na primeira conexão o fingerprint é exibido para confirmação; se mudar depois, o app avisa (possível ataque man-in-the-middle).
-- **Explorer**: navegação com histórico, breadcrumb editável (Ctrl+L, aceita `~`), acesso rápido, ordenação, filtro, arquivos ocultos, menu de contexto e atalhos (F2, Del, F5, Enter, Alt+←/→/↑, Ctrl+A, Ctrl+Shift+N).
-- **Seleção como no Windows**: clique, Ctrl/Shift+clique, retângulo de seleção arrastando a partir do espaço em branco (Ctrl inverte, Shift soma, rola sozinho), Home/End/PageUp/PageDown com Shift, Ctrl+setas e Ctrl+Espaço, e digitar o começo do nome para pular até o item. F5 mantém a seleção.
-- **Arrastar e soltar**: arraste itens pelo ícone/nome para uma pasta, um trecho do caminho ou o Acesso rápido para **mover** (Ctrl copia), ou para a Lixeira. Sem confirmação, com "Desfazer" na notificação. Um balão mostra a ação e o destino, e parar sobre uma pasta a abre. Para sair de uma pasta aberta por engano, pare sobre Voltar, Pasta acima, um trecho do caminho ou o Acesso rápido; cancelar o arraste (Esc ou soltar fora de um alvo) volta à pasta de origem. Arquivos e pastas arrastados do Windows vão para a pasta onde forem soltos.
-- **Copiar, recortar e colar** (Ctrl+C/X/V ou menu): na mesma VPS usa `cp -a`/`mv` no servidor; entre VPS diferentes copia via SFTP preservando permissões e links. Colar na mesma pasta cria "nome - cópia"; itens substituídos vão para a lixeira.
-- **Busca** (Ctrl+F, ou Enter no filtro): por nome ou por conteúdo, na pasta atual e subpastas, com opção de diferenciar maiúsculas e ignorar `node_modules`/`.git`. Resultados de conteúdo mostram a linha e abrem o editor nela. Até 500 resultados, cancelável; ignora `/proc`, `/sys`, `/dev`, binários e arquivos acima de 5 MB.
-- **Permissões e dono** (Alt+Enter ou menu): caixas ler/escrever/executar para dono, grupo e outros, valor numérico (755, 644, 600) e troca de dono/grupo (dono só como root). Em seleção múltipla, bits diferentes aparecem como "misto" e só mudam se clicados. Pode aplicar recursivamente a tudo, só às pastas ou só aos arquivos; pastas do sistema não aceitam alteração recursiva.
-- **Compactar e extrair** (menu do botão direito): cria .zip ou .tar.gz a partir da seleção; extrai .zip, .tar, .tar.gz/.tgz, .tar.bz2 e .tar.xz numa pasta nova ("Extrair para") ou na própria pasta ("Extrair aqui", que pede confirmação e manda para a lixeira o que seria sobrescrito). Arquivos com entradas que escreveriam fora da pasta (`../`, caminhos absolutos) são recusados. O .zip usa os comandos `zip`/`unzip` da VPS; se faltar o `zip`, o diálogo mostra o comando de instalação do gerenciador de pacotes da VPS e, com root ou sudo sem senha, oferece "Instalar agora" e compacta em seguida.
-- **Editor** (Monaco): abas, Ctrl+S, detecção de conflito se o arquivo mudou no servidor, gravação atômica (arquivo temporário + rename), recusa binários, arquivos não UTF-8 e arquivos acima de 5 MB.
-- **Transferências**: upload (botão ou arrastar do Windows, inclusive pastas) e download, com progresso.
-- **Terminal** integrado (xterm.js), aberto na pasta atual.
-- **Lixeira**: Del move para `~/.vpshub-trash` na própria VPS, com "Desfazer" na notificação; a Lixeira (no Acesso rápido) restaura para o local original, exclui itens ou esvazia tudo. Shift+Del apaga permanentemente.
-- **Proteções**: confirmação para excluir; pastas do sistema (`/`, `/etc`, `/usr`…) e a home não podem ser excluídas; aviso ao fechar com arquivos não salvos; se a conexão cair, as abas continuam abertas para reconectar e salvar.
+- **Queda de conexão**: as abas continuam abertas e um botão reconecta, sem perder edições.
+
+### Explorador
+- Navegação com histórico, caminho clicável e editável (Ctrl+L, aceita `~`), Acesso rápido, ordenação, filtro e arquivos ocultos.
+- **Seleção como no Windows**: clique, Ctrl/Shift+clique, **retângulo de seleção** a partir do espaço em branco (Ctrl inverte, Shift soma, rola sozinho), Home/End/PageUp/PageDown (com Shift), Ctrl+setas e Ctrl+Espaço, e digitar o começo do nome para pular até o item.
+- **Arrastar e soltar**: arraste pelo ícone/nome para uma pasta, um trecho do caminho ou o Acesso rápido para **mover** (Ctrl copia), ou para a Lixeira. Sem confirmação, com **Desfazer** na notificação. Um balão mostra a ação e o destino; parar sobre uma pasta a abre, e parar sobre Voltar/Pasta acima sai dela. Cancelar (Esc) volta à pasta de origem.
+- **Arquivos do Windows**: arraste arquivos e pastas do seu PC para enviar, direto para a pasta onde soltar.
+- **Copiar, recortar e colar** (Ctrl+C/X/V): na mesma VPS o servidor faz o trabalho (`cp -a`/`mv`); entre VPS diferentes a cópia passa pelo app, preservando permissões e links. Colar na mesma pasta cria "nome - cópia".
+- **Busca** (Ctrl+F): por nome ou por conteúdo, na pasta e subpastas. Resultados de conteúdo mostram a linha e abrem o editor nela. Cancelável, até 500 resultados.
+- **Permissões e dono** (Alt+Enter): caixas ler/escrever/executar, valor numérico (755, 644, 600), troca de dono e grupo, aplicação recursiva só em pastas ou só em arquivos. Em seleção múltipla, bits diferentes aparecem como "misto" e só mudam se clicados.
+- **Compactar e extrair**: cria `.zip`/`.tar.gz`; extrai `.zip`, `.tar`, `.tar.gz`/`.tgz`, `.tar.bz2` e `.tar.xz` numa pasta nova ou na própria pasta. Se faltar o `zip` na VPS, o app mostra o comando de instalação e pode instalar para você (com root ou sudo sem senha).
+- **Lixeira** em `~/.vpshub-trash` na VPS: Del manda para a lixeira (com Desfazer); dá para restaurar ao local original ou esvaziar. Shift+Del apaga de vez.
+
+### Editor, terminal e transferências
+- **Editor Monaco** com abas e Ctrl+S. Detecta se o arquivo mudou no servidor antes de salvar, grava de forma atômica (temporário + rename) e recusa binários, arquivos não UTF-8 e acima de 5 MB.
+- **Terminal** (xterm.js) aberto na pasta atual, com várias abas.
+- **Upload e download** com progresso, inclusive de pastas.
+
+### Proteções
+- Pastas do sistema (`/`, `/etc`, `/usr`…) e a home não podem ser excluídas, movidas nem alteradas recursivamente.
+- Arquivos compactados com entradas que escreveriam fora da pasta (`../`, caminhos absolutos — "zip slip") são recusados.
+- Substituir algo (colar, extrair, soltar) manda a versão anterior para a lixeira.
+- Aviso ao fechar o app com arquivos não salvos.
+
+## Instalação
+
+Requer **Windows 10 ou 11**. Gere o instalador a partir do código:
+
+```bash
+npm install
+npm run dist
+```
+
+O instalador fica em `dist/VPS Hub Setup <versão>.exe`. Ele não é assinado digitalmente, então o Windows SmartScreen pode avisar na primeira execução: clique em **Mais informações → Executar assim mesmo**.
+
+## Desenvolvimento
+
+Requer **Node.js 22+** (desenvolvido com Node 24).
+
+```bash
+npm install
+npm run dev        # abre o app em modo desenvolvimento (F12 abre o DevTools)
+npm run typecheck  # checagem de tipos
+npm run build      # build de produção em out/
+npm run dist       # instalador Windows em dist/
+npm run test:e2e   # testes de ponta a ponta (precisa do Docker Desktop rodando)
+```
+
+### Testes
+
+`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda **82 cenários**: conexão e host key, explorador, editor, transferências, terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar entre VPS, seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
+
+Para rodar só uma suíte (depois de `npm run build`):
+
+```bash
+node --test --test-global-setup=tests/e2e/setup.mjs tests/e2e/paste.test.mjs
+```
 
 ## Arquitetura
+
+Electron + React + TypeScript, com `ssh2` para SSH/SFTP.
 
 ```
 src/
 ├─ main/        processo principal (Node): SSH, SFTP, terminal, armazenamento
-│  ├─ store.ts      conexões + segredos criptografados + known hosts (userData/vps-hub.json)
+│  ├─ store.ts      conexões, segredos criptografados e host keys (userData/vps-hub.json)
 │  ├─ sessions.ts   uma conexão SSH por VPS, verificação de host key
 │  ├─ files.ts      operações SFTP e transferências
 │  ├─ trash.ts      exclusão, lixeira e restauração
-│  ├─ archive.ts    compactar e extrair (zip/tar), com proteção contra zip slip
 │  ├─ paste.ts      copiar/recortar/colar (mesma VPS e entre VPS)
+│  ├─ archive.ts    compactar e extrair (zip/tar)
 │  ├─ perms.ts      permissões e dono (chmod/chown/chgrp)
-│  ├─ search.ts     busca por nome (find) e conteúdo (grep), com cancelamento
+│  ├─ search.ts     busca por nome (find) e conteúdo (grep)
 │  ├─ sshConfig.ts  leitura do ~/.ssh/config
 │  ├─ terminals.ts  shells interativos
 │  └─ ipc.ts        canais IPC
 ├─ preload/     ponte segura (contextIsolation) que expõe window.vpsApi
-├─ renderer/    React: Hub, Workspace (Explorer, Editor, Terminal, Transferências)
+├─ renderer/    React: Hub e Workspace (explorador, editor, terminal, transferências)
 └─ shared/      tipos e utilitários de caminho usados pelos dois lados
+tests/e2e/      testes de ponta a ponta (node --test + Playwright + Docker)
 ```
 
-O renderer nunca recebe senhas nem chaves; tudo que envolve credenciais fica no processo principal.
+**Segurança**: só o processo principal lida com credenciais, rede e disco; a interface nunca recebe senhas nem chaves. A janela roda com `contextIsolation`, `sandbox` e sem integração com Node. Todo comando enviado à VPS tem os caminhos escapados.
+
+Detalhes de arquitetura e convenções para quem for mexer no código estão em [CLAUDE.md](CLAUDE.md).
+
+## Contribuindo
+
+Mensagens de commit em inglês, no padrão [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `test:`…). Antes de abrir um PR, rode `npm run typecheck` e `npm run test:e2e`, e adicione cenários de teste para funcionalidades novas.
