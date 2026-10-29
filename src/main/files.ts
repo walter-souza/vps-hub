@@ -54,6 +54,7 @@ export async function list(id: string, dir: string): Promise<FileEntry[]> {
       .filter((i) => i.filename !== '.' && i.filename !== '..')
       .map(async (i): Promise<FileEntry> => {
         const full = joinPath(path, i.filename)
+        const cols = i.longname.split(/\s+/) // "-rw-r--r-- 1 dono grupo ..."
         const isLink = i.attrs.isSymbolicLink()
         const isDir = isLink
           ? await call<Stats>((cb) => sftp.stat(full, cb)).then((s) => s.isDirectory(), () => false)
@@ -66,7 +67,8 @@ export async function list(id: string, dir: string): Promise<FileEntry[]> {
           size: i.attrs.size,
           mtime: i.attrs.mtime,
           perms: permString(i.attrs.mode),
-          owner: i.longname.split(/\s+/)[2] ?? String(i.attrs.uid)
+          owner: cols[2] ?? String(i.attrs.uid),
+          group: cols[3] ?? String(i.attrs.gid)
         }
       })
   )

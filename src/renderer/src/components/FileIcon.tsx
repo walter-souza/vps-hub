@@ -10,7 +10,7 @@ add(FileArchive, 'zip tar gz tgz bz2 xz 7z rar zst')
 add(FileCog, 'conf cfg ini env toml yml yaml service lock')
 add(FileText, 'md txt log csv rst')
 
-export function FileIcon({ entry, size = 15 }: { entry: FileEntry; size?: number }) {
+export function FileIcon({ entry, size = 15 }: { entry: Pick<FileEntry, 'name' | 'type' | 'isDir'>; size?: number }) {
   if (entry.isDir) {
     const Icon = entry.type === 'link' ? FolderSymlink : Folder
     return <Icon size={size} className="shrink-0 text-amber-400" />

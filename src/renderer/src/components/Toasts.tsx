@@ -18,7 +18,7 @@ export function Toasts() {
             className="pointer-events-auto flex items-start gap-2.5 rounded-lg border border-line bg-panel-2 p-3 shadow-xl"
           >
             <Icon size={16} className={`mt-0.5 shrink-0 ${colors[t.kind]}`} />
-            <div className="min-w-0 flex-1 break-words">{t.text}</div>
+            <div className="min-w-0 flex-1 break-words whitespace-pre-line">{t.text}</div>
             {t.action && (
               <button
                 className="shrink-0 text-xs font-medium text-accent hover:underline"

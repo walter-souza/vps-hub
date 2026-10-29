@@ -65,6 +65,25 @@ export interface TrashItem {
 
 export type PasteMode = 'copy' | 'cut'
 
+export interface PermChange {
+  /** Bits (0o777) a ligar e a desligar; os demais ficam como estão em cada item. */
+  set: number
+  clear: number
+  /** Ausente = não muda. */
+  owner?: string
+  group?: string
+  recursive: boolean
+  /** Com recursive: em quais itens aplicar as permissões (o dono vale para todos). */
+  applyTo: 'all' | 'dirs' | 'files'
+}
+
+export interface Accounts {
+  users: string[]
+  groups: string[]
+  /** Só root pode trocar o dono de arquivos. */
+  isRoot: boolean
+}
+
 export interface SearchQuery {
   /** Pasta onde a busca começa (recursiva). */
   dir: string
@@ -105,6 +124,7 @@ export interface FileEntry {
   mtime: number
   perms: string
   owner: string
+  group: string
 }
 
 export interface FileContent {
@@ -162,6 +182,8 @@ export interface VpsApi {
     paste(srcId: string, paths: string[], destId: string, destDir: string, mode: PasteMode, replace: boolean): Promise<string[]>
     search(id: string, searchId: string, query: SearchQuery): Promise<SearchResponse>
     cancelSearch(searchId: string): Promise<void>
+    setPermissions(id: string, paths: string[], change: PermChange): Promise<void>
+    accounts(id: string): Promise<Accounts>
     pickUpload(): Promise<string[]>
     upload(id: string, localPaths: string[], remoteDir: string): Promise<void>
     /** Pergunta a pasta local de destino; retorna null se cancelado. */

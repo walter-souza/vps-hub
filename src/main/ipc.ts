@@ -8,6 +8,7 @@ import { connectSession, disconnect, probe, testConnection } from './sessions'
 import { readSshConfig } from './sshConfig'
 import { store } from './store'
 import { paste } from './paste'
+import { accounts, changePermissions } from './perms'
 import { cancelSearch, search } from './search'
 import * as trash from './trash'
 import { closeTerminal, openTerminal, resizeTerminal, writeTerminal } from './terminals'
@@ -55,6 +56,8 @@ export function registerIpc(): void {
   handle('fs:rename', files.rename)
   handle('fs:remove', trash.remove)
   handle('fs:paste', paste)
+  handle('fs:setPermissions', changePermissions)
+  handle('fs:accounts', accounts)
   handle('fs:search', search)
   handle('fs:cancelSearch', cancelSearch)
   handle('fs:pickUpload', files.pickUpload)

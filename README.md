@@ -15,7 +15,7 @@ npm run test:e2e   # testes de ponta a ponta (precisa do Docker Desktop rodando)
 
 ## Testes
 
-`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda 42 cenários: conexão e host key, explorer, editor, transferências, terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, copiar/colar (inclusive entre VPS) e busca (com BusyBox e com GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
+`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda 48 cenários: conexão e host key, explorer, editor, transferências, terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, copiar/colar (inclusive entre VPS), permissões e busca (com BusyBox e com GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
 
 O instalador não é assinado digitalmente, então o Windows SmartScreen pode avisar na primeira execução ("Mais informações" → "Executar assim mesmo").
 
@@ -28,6 +28,7 @@ O instalador não é assinado digitalmente, então o Windows SmartScreen pode av
 - **Explorer**: navegação com histórico, breadcrumb editável (Ctrl+L, aceita `~`), acesso rápido, ordenação, filtro, arquivos ocultos, multisseleção, menu de contexto e atalhos (F2, Del, F5, Enter, Alt+←/→/↑, Ctrl+A, Ctrl+Shift+N).
 - **Copiar, recortar e colar** (Ctrl+C/X/V ou menu): na mesma VPS usa `cp -a`/`mv` no servidor; entre VPS diferentes copia via SFTP preservando permissões e links. Colar na mesma pasta cria "nome - cópia"; itens substituídos vão para a lixeira.
 - **Busca** (Ctrl+F, ou Enter no filtro): por nome ou por conteúdo, na pasta atual e subpastas, com opção de diferenciar maiúsculas e ignorar `node_modules`/`.git`. Resultados de conteúdo mostram a linha e abrem o editor nela. Até 500 resultados, cancelável; ignora `/proc`, `/sys`, `/dev`, binários e arquivos acima de 5 MB.
+- **Permissões e dono** (Alt+Enter ou menu): caixas ler/escrever/executar para dono, grupo e outros, valor numérico (755, 644, 600) e troca de dono/grupo (dono só como root). Em seleção múltipla, bits diferentes aparecem como "misto" e só mudam se clicados. Pode aplicar recursivamente a tudo, só às pastas ou só aos arquivos; pastas do sistema não aceitam alteração recursiva.
 - **Editor** (Monaco): abas, Ctrl+S, detecção de conflito se o arquivo mudou no servidor, gravação atômica (arquivo temporário + rename), recusa binários, arquivos não UTF-8 e arquivos acima de 5 MB.
 - **Transferências**: upload (botão ou arrastar do Windows, inclusive pastas) e download, com progresso.
 - **Terminal** integrado (xterm.js), aberto na pasta atual.
@@ -44,6 +45,7 @@ src/
 │  ├─ files.ts      operações SFTP e transferências
 │  ├─ trash.ts      exclusão, lixeira e restauração
 │  ├─ paste.ts      copiar/recortar/colar (mesma VPS e entre VPS)
+│  ├─ perms.ts      permissões e dono (chmod/chown/chgrp)
 │  ├─ search.ts     busca por nome (find) e conteúdo (grep), com cancelamento
 │  ├─ sshConfig.ts  leitura do ~/.ssh/config
 │  ├─ terminals.ts  shells interativos

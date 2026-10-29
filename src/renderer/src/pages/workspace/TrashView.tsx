@@ -110,7 +110,7 @@ export function TrashView({ vpsId, onRestored }: { vpsId: string; onRestored: ()
             className={`${COLS} h-7 cursor-default items-center px-2 ${selected.has(i.id) ? 'bg-accent/25' : 'hover:bg-hover'}`}
           >
             <div className="flex min-w-0 items-center gap-2 px-2">
-              <FileIcon entry={{ name: i.name, path: '', type: i.isDir ? 'dir' : 'file', isDir: i.isDir, size: i.size, mtime: 0, perms: '', owner: '' }} />
+              <FileIcon entry={{ name: i.name, isDir: i.isDir, type: i.isDir ? 'dir' : 'file' }} />
               <span className="truncate">{i.name}</span>
             </div>
             <span className="truncate px-2 font-mono text-xs text-muted" title={i.originalPath}>

@@ -181,7 +181,7 @@ export function SearchView({ vpsId, dir: initialDir, initialTerm, onOpenFile, on
             onContextMenu={(e) => rowMenu(e, r)}
             className={`flex cursor-default items-center gap-3 px-3 py-1 ${selected === r.path ? 'bg-accent/25' : 'hover:bg-hover'}`}
           >
-            <FileIcon entry={{ ...r, type: r.isDir ? 'dir' : 'file', perms: '', owner: '' }} />
+            <FileIcon entry={{ name: r.name, isDir: r.isDir, type: r.isDir ? 'dir' : 'file' }} />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-2">
                 <span className="truncate">

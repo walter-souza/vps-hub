@@ -21,6 +21,7 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  ShieldCheck,
   SquareTerminal,
   Trash2,
   Upload
@@ -35,6 +36,7 @@ import { confirm, prompt } from '../../lib/dialogs'
 import { formatDate, formatSize } from '../../lib/format'
 import { toast, useApp } from '../../lib/store'
 import { SearchView } from './SearchView'
+import { PermissionsDialog } from './PermissionsDialog'
 import { TrashView } from './TrashView'
 
 type SortKey = 'name' | 'size' | 'mtime'
@@ -82,6 +84,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   // O painel central mostra a pasta atual, a lixeira ou os resultados de uma busca.
   const [view, setView] = useState<'files' | 'trash' | 'search'>('files')
   const [search, setSearch] = useState({ term: '', key: 0 })
+  const [permsFor, setPermsFor] = useState<FileEntry[] | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadSeq = useRef(0)
   const closeMenu = useCallback(() => setMenu(null), [])
@@ -394,8 +397,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
         { label: 'Copiar caminho', icon: ClipboardCopy, onClick: () => copyPath(entry.path) }
       )
       if (entry.isDir) items.push({ label: 'Abrir terminal aqui', icon: SquareTerminal, onClick: () => onOpenTerminal(entry.path) })
-      items.push('sep')
     }
+    items.push({ label: 'Permissões e dono…', icon: ShieldCheck, shortcut: 'Alt+Enter', onClick: () => setPermsFor(list) }, 'sep')
     if (!isTrashPath(cwd)) items.push({ label: 'Mover para a lixeira', icon: Trash2, shortcut: 'Del', onClick: () => remove(list) })
     items.push({ label: 'Excluir permanentemente', icon: Trash2, shortcut: 'Shift+Del', danger: true, onClick: () => remove(list, true) })
     setMenu({ x: e.clientX, y: e.clientY, items })
@@ -450,7 +453,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     if (k === 'ArrowDown') return handled(), moveSelection(1, e.shiftKey)
     if (k === 'ArrowUp') return handled(), moveSelection(-1, e.shiftKey)
     if (k === 'Escape') return setSelected(new Set())
-    if (k === 'Enter' && selection.length === 1) return handled(), open(selection[0])
+    if (k === 'Enter' && !e.altKey && selection.length === 1) return handled(), open(selection[0])
+    if (e.altKey && k === 'Enter' && selection.length > 0) return handled(), setPermsFor(selection)
     if (k === 'F2' && selection.length === 1) return handled(), rename(selection[0])
     if (k === 'Delete' && selection.length > 0) return handled(), remove(selection, e.shiftKey)
   }
@@ -674,6 +678,9 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       </div>
 
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
+      {permsFor && (
+        <PermissionsDialog vpsId={id} entries={permsFor} onClose={() => setPermsFor(null)} onApplied={() => refresh(permsFor.map((e) => e.path))} />
+      )}
     </div>
   )
 }

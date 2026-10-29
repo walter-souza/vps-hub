@@ -10,7 +10,8 @@ import { exec, getSession, sh, shellQuote, type Session } from './sessions'
 const TRASH_DIR = '.vpshub-trash'
 const META = '.vpshub-origin.json'
 const ID_RE = /^\d+-[0-9a-f]+$/
-const PROTECTED = new Set(
+/** Pastas do sistema que o VPS Hub nunca exclui, move nem altera recursivamente. */
+export const PROTECTED = new Set(
   ['/', '/bin', '/boot', '/dev', '/etc', '/home', '/lib', '/lib64', '/opt', '/proc', '/root', '/run', '/sbin', '/srv', '/sys', '/usr', '/var']
 )
 
