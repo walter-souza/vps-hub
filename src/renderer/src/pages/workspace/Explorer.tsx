@@ -34,6 +34,7 @@ import { api, errMsg } from '../../lib/api'
 import { confirm, prompt } from '../../lib/dialogs'
 import { formatDate, formatSize } from '../../lib/format'
 import { toast, useApp } from '../../lib/store'
+import { SearchView } from './SearchView'
 import { TrashView } from './TrashView'
 
 type SortKey = 'name' | 'size' | 'mtime'
@@ -43,7 +44,7 @@ interface Props {
   info: SessionInfo
   closed: boolean
   hidden: boolean
-  onOpenFile: (path: string) => void
+  onOpenFile: (path: string, line?: number) => void
   onOpenTerminal: (cwd: string) => void
 }
 
@@ -78,7 +79,9 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   const [editingPath, setEditingPath] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [dropActive, setDropActive] = useState(false)
-  const [showTrash, setShowTrash] = useState(false)
+  // O painel central mostra a pasta atual, a lixeira ou os resultados de uma busca.
+  const [view, setView] = useState<'files' | 'trash' | 'search'>('files')
+  const [search, setSearch] = useState({ term: '', key: 0 })
   const listRef = useRef<HTMLDivElement>(null)
   const loadSeq = useRef(0)
   const closeMenu = useCallback(() => setMenu(null), [])
@@ -119,22 +122,22 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     load(startPath).then((ok) => !ok && startPath !== info.home && load(info.home))
   }, [closed]) // só reage à conexão; as demais dependências são estáveis por sessão
 
-  const navigate = async (path: string) => {
-    setShowTrash(false)
+  const navigate = async (path: string, select: string[] = []) => {
+    setView('files')
     const from = cwdRef.current
-    if (path === from) return refresh()
-    if (await load(path)) {
+    if (path === from) return refresh(select)
+    if (await load(path, select)) {
       setHist((h) => ({ back: [...h.back, from], fwd: [] }))
       setFilter('')
     }
   }
   const back = async () => {
-    setShowTrash(false)
+    setView('files')
     const prev = hist.back.at(-1)
     if (prev && (await load(prev))) setHist((h) => ({ back: h.back.slice(0, -1), fwd: [cwdRef.current, ...h.fwd] }))
   }
   const forward = async () => {
-    setShowTrash(false)
+    setView('files')
     const next = hist.fwd[0]
     if (next && (await load(next))) setHist((h) => ({ back: [...h.back, cwdRef.current], fwd: h.fwd.slice(1) }))
   }
@@ -164,6 +167,28 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       toast('error', errMsg(e))
     }
   }
+
+  // O termo passa do filtro para a busca; o filtro é limpo para não esconder itens ao voltar à pasta.
+  const openSearch = (term: string) => {
+    setSearch((s) => ({ term, key: s.key + 1 }))
+    setFilter('')
+    setView('search')
+  }
+
+  // Ctrl+F vale para a janela toda enquanto o explorador está visível (exceto em campos de texto e no terminal).
+  const openSearchRef = useRef(openSearch)
+  openSearchRef.current = openSearch
+  useEffect(() => {
+    if (hidden) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      if (!e.ctrlKey || e.key.toLowerCase() !== 'f' || tag === 'INPUT' || tag === 'TEXTAREA') return
+      e.preventDefault()
+      openSearchRef.current('')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [hidden])
 
   const open = (e: FileEntry) => (e.isDir ? navigate(e.path) : onOpenFile(e.path))
 
@@ -516,12 +541,17 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setFilter('')
+              else if (e.key === 'Enter' && filter.trim()) openSearch(filter)
+            }}
             placeholder="Filtrar nesta pasta"
+            title="Enter busca também nas subpastas"
             aria-label="Filtrar nesta pasta"
             className="h-7 w-full rounded-md border border-line bg-bg pr-2 pl-7 text-xs outline-none focus:border-accent"
           />
         </div>
+        <NavButton label="Buscar em subpastas (Ctrl+F)" onClick={() => openSearch(filter)} icon={Search} />
         <NavButton label="Novo arquivo" onClick={() => newItem('file')} icon={FilePlus} />
         <NavButton label="Nova pasta (Ctrl+Shift+N)" onClick={() => newItem('dir')} icon={FolderPlus} />
         <NavButton label="Enviar arquivos" onClick={async () => upload(await api.fs.pickUpload())} icon={Upload} />
@@ -537,7 +567,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
               key={p.path}
               onClick={() => navigate(p.path)}
               title={p.path}
-              className={`flex h-7 w-full items-center gap-2 px-3 text-left ${!showTrash && cwd === p.path ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
+              className={`flex h-7 w-full items-center gap-2 px-3 text-left ${view === 'files' && cwd === p.path ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
             >
               <p.icon size={14} className="shrink-0" />
               <span className="truncate">{p.label}</span>
@@ -545,20 +575,31 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
           ))}
           <div className="mx-3 my-2 h-px bg-line" />
           <button
-            onClick={() => setShowTrash(true)}
+            onClick={() => setView('trash')}
             title={trashRoot}
-            className={`flex h-7 w-full items-center gap-2 px-3 text-left ${showTrash ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
+            className={`flex h-7 w-full items-center gap-2 px-3 text-left ${view === 'trash' ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
           >
             <Trash2 size={14} className="shrink-0" />
             <span className="truncate">Lixeira</span>
           </button>
         </nav>
 
-        {showTrash && <TrashView vpsId={id} onRestored={() => refresh()} />}
+        {view === 'trash' && <TrashView vpsId={id} onRestored={() => refresh()} />}
+        {view === 'search' && (
+          <SearchView
+            key={search.key}
+            vpsId={id}
+            dir={cwd}
+            initialTerm={search.term}
+            onOpenFile={onOpenFile}
+            onNavigate={(dir, select) => navigate(dir, select ? [select] : [])}
+            onClose={() => setView('files')}
+          />
+        )}
 
         {/* Lista de arquivos */}
         <div
-          className={`relative flex min-w-0 flex-1 flex-col ${dropActive ? 'ring-2 ring-accent ring-inset' : ''} ${showTrash ? 'hidden' : ''}`}
+          className={`relative flex min-w-0 flex-1 flex-col ${dropActive ? 'ring-2 ring-accent ring-inset' : ''} ${view !== 'files' ? 'hidden' : ''}`}
           onDragOver={(e) => {
             if (!e.dataTransfer.types.includes('Files')) return
             e.preventDefault()

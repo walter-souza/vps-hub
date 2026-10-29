@@ -1,6 +1,7 @@
 import Editor from '@monaco-editor/react'
 import { RotateCw, Save } from 'lucide-react'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
+import type { editor } from 'monaco-editor'
 import { Button } from '../../components/ui'
 import { modelUri } from '../../lib/monaco'
 
@@ -11,6 +12,8 @@ export interface OpenFile {
   saved: string
   mtime: number | null
   saving: boolean
+  /** Linha a exibir (ex.: resultado de busca). */
+  reveal?: { line: number; seq: number }
 }
 
 interface Props {
@@ -19,12 +22,25 @@ interface Props {
   onChange: (content: string) => void
   onSave: () => void
   onReload: () => void
+  /** Chamado após rolar até file.reveal, para não repetir ao voltar à aba. */
+  onRevealed: () => void
 }
 
-export function EditorView({ vpsId, file, onChange, onSave, onReload }: Props) {
+export function EditorView({ vpsId, file, onChange, onSave, onReload, onRevealed }: Props) {
   const saveRef = useRef(onSave)
   saveRef.current = onSave
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const dirty = file.content !== file.saved
+
+  const revealLine = () => {
+    const ed = editorRef.current
+    if (!ed || !file.reveal) return
+    ed.revealLineInCenter(file.reveal.line)
+    ed.setPosition({ lineNumber: file.reveal.line, column: 1 })
+    ed.focus()
+    onRevealed()
+  }
+  useEffect(revealLine, [file.reveal]) // aba já aberta: novo pedido de linha
 
   return (
     <div className="absolute inset-0 flex flex-col">
@@ -46,8 +62,10 @@ export function EditorView({ vpsId, file, onChange, onSave, onReload }: Props) {
           theme="vs-dark"
           onChange={(v) => onChange(v ?? '')}
           onMount={(editor, monaco) => {
+            editorRef.current = editor
             editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveRef.current())
             editor.focus()
+            revealLine()
           }}
           options={{
             fontSize: 13,

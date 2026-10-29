@@ -49,11 +49,16 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
     setFiles((fs) => fs.map((f) => (f.path === path ? { ...f, ...patch } : f)))
 
   const openFile = useCallback(
-    async (path: string) => {
-      if (filesRef.current.some((f) => f.path === path)) return setTab(path)
+    async (path: string, line?: number) => {
+      // seq muda a cada pedido, para rolar de novo mesmo que a linha seja a mesma.
+      const reveal = line ? { line, seq: Date.now() } : undefined
+      if (filesRef.current.some((f) => f.path === path)) {
+        if (reveal) setFiles((fs) => fs.map((f) => (f.path === path ? { ...f, reveal } : f)))
+        return setTab(path)
+      }
       try {
         const { content, mtime } = await api.fs.read(id, path)
-        setFiles((fs) => (fs.some((f) => f.path === path) ? fs : [...fs, { path, content, saved: content, mtime, saving: false }]))
+        setFiles((fs) => (fs.some((f) => f.path === path) ? fs : [...fs, { path, content, saved: content, mtime, saving: false, reveal }]))
         setTab(path)
       } catch (e) {
         toast('error', errMsg(e))
@@ -212,6 +217,7 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onChange={(content) => patchFile(f.path, { content })}
               onSave={() => saveFile(f.path)}
               onReload={() => reloadFile(f.path)}
+              onRevealed={() => patchFile(f.path, { reveal: undefined })}
             />
           ))}
       </main>

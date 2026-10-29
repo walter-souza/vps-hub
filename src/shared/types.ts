@@ -65,6 +65,35 @@ export interface TrashItem {
 
 export type PasteMode = 'copy' | 'cut'
 
+export interface SearchQuery {
+  /** Pasta onde a busca começa (recursiva). */
+  dir: string
+  term: string
+  mode: 'name' | 'content'
+  caseSensitive: boolean
+  /** Ignora node_modules e .git. */
+  skipHeavy: boolean
+}
+
+export interface SearchResult {
+  path: string
+  name: string
+  parent: string
+  isDir: boolean
+  size: number
+  mtime: number
+  /** Busca por conteúdo: primeira linha que contém o termo. */
+  line?: number
+  preview?: string
+}
+
+export interface SearchResponse {
+  results: SearchResult[]
+  /** Parou no limite de resultados. */
+  truncated: boolean
+  canceled: boolean
+}
+
 export interface FileEntry {
   name: string
   path: string
@@ -131,6 +160,8 @@ export interface VpsApi {
     remove(id: string, paths: string[], permanent: boolean): Promise<string[]>
     /** Cola itens (de qualquer VPS conectada) em destDir; replace manda os existentes para a lixeira. Retorna os caminhos finais. */
     paste(srcId: string, paths: string[], destId: string, destDir: string, mode: PasteMode, replace: boolean): Promise<string[]>
+    search(id: string, searchId: string, query: SearchQuery): Promise<SearchResponse>
+    cancelSearch(searchId: string): Promise<void>
     pickUpload(): Promise<string[]>
     upload(id: string, localPaths: string[], remoteDir: string): Promise<void>
     /** Pergunta a pasta local de destino; retorna null se cancelado. */
