@@ -8,9 +8,16 @@ App desktop (Electron) para gerenciar várias VPS e navegar pelos arquivos delas
 npm install
 npm run dev        # desenvolvimento (F12 abre o DevTools)
 npm run build      # build de produção em out/
-npm run dist       # instalador Windows em dist/
+npm run dist       # instalador Windows em dist/ ("VPS Hub Setup <versão>.exe")
 npm run typecheck
+npm run test:e2e   # testes de ponta a ponta (precisa do Docker Desktop rodando)
 ```
+
+## Testes
+
+`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda 42 cenários: conexão e host key, explorer, editor, transferências, terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, copiar/colar (inclusive entre VPS) e busca (com BusyBox e com GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
+
+O instalador não é assinado digitalmente, então o Windows SmartScreen pode avisar na primeira execução ("Mais informações" → "Executar assim mesmo").
 
 ## Funcionalidades
 
