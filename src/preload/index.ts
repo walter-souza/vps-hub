@@ -21,7 +21,8 @@ const api: VpsApi = {
     remove: (id) => invoke('connections:remove', id),
     test: (input, id) => invoke('connections:test', input, id),
     probe: (id) => invoke('connections:probe', id),
-    pickKeyFile: () => invoke('connections:pickKeyFile')
+    pickKeyFile: () => invoke('connections:pickKeyFile'),
+    readSshConfig: () => invoke('connections:readSshConfig')
   },
   session: {
     connect: (id, secret) => invoke('session:connect', id, secret),
@@ -35,12 +36,17 @@ const api: VpsApi = {
     createFile: (id, path) => invoke('fs:createFile', id, path),
     mkdir: (id, path) => invoke('fs:mkdir', id, path),
     rename: (id, from, to) => invoke('fs:rename', id, from, to),
-    remove: (id, paths) => invoke('fs:remove', id, paths),
+    remove: (id, paths, permanent) => invoke('fs:remove', id, paths, permanent),
     pickUpload: () => invoke('fs:pickUpload'),
     upload: (id, localPaths, remoteDir) => invoke('fs:upload', id, localPaths, remoteDir),
     download: (id, remotePaths) => invoke('fs:download', id, remotePaths),
     revealLocal: (path) => invoke('fs:revealLocal', path),
     pathForFile: (file) => webUtils.getPathForFile(file)
+  },
+  trash: {
+    list: (id) => invoke('trash:list', id),
+    restore: (id, trashIds) => invoke('trash:restore', id, trashIds),
+    purge: (id, trashIds) => invoke('trash:purge', id, trashIds)
   },
   transfers: {
     onProgress: (cb) => on('transfer:progress', cb)

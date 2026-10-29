@@ -31,6 +31,7 @@ import { api, errMsg } from '../../lib/api'
 import { confirm, prompt } from '../../lib/dialogs'
 import { formatDate, formatSize } from '../../lib/format'
 import { toast } from '../../lib/store'
+import { TrashView } from './TrashView'
 
 type SortKey = 'name' | 'size' | 'mtime'
 
@@ -57,6 +58,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     [info.home]
   )
   const startPath = vps.initialPath ? resolve(vps.initialPath, info.home) : info.home
+  const trashRoot = joinPath(info.home, '.vpshub-trash')
+  const isTrashPath = (p: string) => p === trashRoot || p.startsWith(`${trashRoot}/`)
 
   const [cwd, setCwd] = useState(startPath)
   const cwdRef = useRef(cwd)
@@ -72,6 +75,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   const [editingPath, setEditingPath] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [dropActive, setDropActive] = useState(false)
+  const [showTrash, setShowTrash] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const loadSeq = useRef(0)
   const closeMenu = useCallback(() => setMenu(null), [])
@@ -113,6 +117,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   }, [closed]) // só reage à conexão; as demais dependências são estáveis por sessão
 
   const navigate = async (path: string) => {
+    setShowTrash(false)
     const from = cwdRef.current
     if (path === from) return refresh()
     if (await load(path)) {
@@ -121,10 +126,12 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     }
   }
   const back = async () => {
+    setShowTrash(false)
     const prev = hist.back.at(-1)
     if (prev && (await load(prev))) setHist((h) => ({ back: h.back.slice(0, -1), fwd: [cwdRef.current, ...h.fwd] }))
   }
   const forward = async () => {
+    setShowTrash(false)
     const next = hist.fwd[0]
     if (next && (await load(next))) setHist((h) => ({ back: [...h.back, cwdRef.current], fwd: h.fwd.slice(1) }))
   }
@@ -184,19 +191,41 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     })
   }
 
-  const remove = async (list: FileEntry[]) => {
+  /** Del manda para a lixeira; Shift+Del (ou itens já dentro da lixeira) apaga de vez. */
+  const remove = async (list: FileEntry[], permanent = false) => {
     if (list.length === 0) return
-    const ok = await confirm({
-      title: list.length === 1 ? `Excluir "${list[0].name}"?` : `Excluir ${list.length} itens?`,
-      message: 'Os itens serão apagados permanentemente da VPS. Pastas são excluídas com todo o conteúdo. Não há como desfazer.',
-      detail: list.map((e) => e.name + (e.isDir ? '/' : '')),
-      confirmLabel: 'Excluir permanentemente',
-      danger: true
-    })
+    const hard = permanent || isTrashPath(cwdRef.current)
+    const what = list.length === 1 ? `"${list[0].name}"` : `${list.length} itens`
+    const ok = await confirm(
+      hard
+        ? {
+            title: `Excluir ${what} permanentemente?`,
+            message: 'Os itens serão apagados da VPS sem passar pela lixeira. Pastas são excluídas com todo o conteúdo. Não há como desfazer.',
+            detail: list.map((e) => e.name + (e.isDir ? '/' : '')),
+            confirmLabel: 'Excluir permanentemente',
+            danger: true
+          }
+        : {
+            title: `Mover ${what} para a lixeira?`,
+            message: 'Você pode restaurá-los depois pela Lixeira, no Acesso rápido.',
+            detail: list.map((e) => e.name + (e.isDir ? '/' : '')),
+            confirmLabel: 'Mover para a lixeira'
+          }
+    )
     if (!ok) return
     await run(async () => {
       try {
-        await api.fs.remove(id, list.map((e) => e.path))
+        const trashIds = await api.fs.remove(id, list.map((e) => e.path), hard)
+        if (trashIds.length > 0) {
+          toast('success', `${what} movido(s) para a lixeira.`, {
+            label: 'Desfazer',
+            run: () =>
+              run(async () => {
+                await api.trash.restore(id, trashIds)
+                await refresh(list.map((e) => e.path))
+              })
+          })
+        }
       } finally {
         await refresh()
       }
@@ -289,7 +318,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       if (entry.isDir) items.push({ label: 'Abrir terminal aqui', icon: SquareTerminal, onClick: () => onOpenTerminal(entry.path) })
       items.push('sep')
     }
-    items.push({ label: 'Excluir', icon: Trash2, shortcut: 'Del', danger: true, onClick: () => remove(list) })
+    if (!isTrashPath(cwd)) items.push({ label: 'Mover para a lixeira', icon: Trash2, shortcut: 'Del', onClick: () => remove(list) })
+    items.push({ label: 'Excluir permanentemente', icon: Trash2, shortcut: 'Shift+Del', danger: true, onClick: () => remove(list, true) })
     setMenu({ x: e.clientX, y: e.clientY, items })
   }
 
@@ -339,7 +369,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     if (k === 'Escape') return setSelected(new Set())
     if (k === 'Enter' && selection.length === 1) return handled(), open(selection[0])
     if (k === 'F2' && selection.length === 1) return handled(), rename(selection[0])
-    if (k === 'Delete' && selection.length > 0) return handled(), remove(selection)
+    if (k === 'Delete' && selection.length > 0) return handled(), remove(selection, e.shiftKey)
   }
 
   const onDrop = (e: DragEvent) => {
@@ -449,17 +479,28 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
               key={p.path}
               onClick={() => navigate(p.path)}
               title={p.path}
-              className={`flex h-7 w-full items-center gap-2 px-3 text-left ${cwd === p.path ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
+              className={`flex h-7 w-full items-center gap-2 px-3 text-left ${!showTrash && cwd === p.path ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
             >
               <p.icon size={14} className="shrink-0" />
               <span className="truncate">{p.label}</span>
             </button>
           ))}
+          <div className="mx-3 my-2 h-px bg-line" />
+          <button
+            onClick={() => setShowTrash(true)}
+            title={trashRoot}
+            className={`flex h-7 w-full items-center gap-2 px-3 text-left ${showTrash ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
+          >
+            <Trash2 size={14} className="shrink-0" />
+            <span className="truncate">Lixeira</span>
+          </button>
         </nav>
+
+        {showTrash && <TrashView vpsId={id} onRestored={() => refresh()} />}
 
         {/* Lista de arquivos */}
         <div
-          className={`relative flex min-w-0 flex-1 flex-col ${dropActive ? 'ring-2 ring-accent ring-inset' : ''}`}
+          className={`relative flex min-w-0 flex-1 flex-col ${dropActive ? 'ring-2 ring-accent ring-inset' : ''} ${showTrash ? 'hidden' : ''}`}
           onDragOver={(e) => {
             if (!e.dataTransfer.types.includes('Files')) return
             e.preventDefault()

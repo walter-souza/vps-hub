@@ -5,7 +5,9 @@ import type { Result } from '../shared/types'
 import { toApiError } from './errors'
 import * as files from './files'
 import { connectSession, disconnect, probe, testConnection } from './sessions'
+import { readSshConfig } from './sshConfig'
 import { store } from './store'
+import * as trash from './trash'
 import { closeTerminal, openTerminal, resizeTerminal, writeTerminal } from './terminals'
 
 // Canais com resposta: o resultado vai embrulhado em Result para preservar mensagem e código do erro.
@@ -38,6 +40,7 @@ export function registerIpc(): void {
   handle('connections:test', testConnection)
   handle('connections:probe', probe)
   handle('connections:pickKeyFile', pickKeyFile)
+  handle('connections:readSshConfig', readSshConfig)
 
   handle('session:connect', connectSession)
   handle('session:disconnect', disconnect)
@@ -48,11 +51,15 @@ export function registerIpc(): void {
   handle('fs:createFile', files.createFile)
   handle('fs:mkdir', files.makeDir)
   handle('fs:rename', files.rename)
-  handle('fs:remove', files.remove)
+  handle('fs:remove', trash.remove)
   handle('fs:pickUpload', files.pickUpload)
   handle('fs:upload', files.upload)
   handle('fs:download', files.download)
   handle('fs:revealLocal', files.revealLocal)
+
+  handle('trash:list', trash.list)
+  handle('trash:restore', trash.restore)
+  handle('trash:purge', trash.purge)
 
   handle('terminal:open', openTerminal)
   ipcMain.on('terminal:write', (_e, termId, data) => writeTerminal(termId, data))

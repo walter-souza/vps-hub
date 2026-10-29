@@ -8,26 +8,23 @@ import { baseName, joinPath, normalizePath, parentPath } from '../shared/paths'
 import type { FileContent, FileEntry, TransferEvent } from '../shared/types'
 import { AppError, toAppError } from './errors'
 import { emit } from './events'
-import { exec, getSession, shellQuote, type Session } from './sessions'
+import { getSession, type Session } from './sessions'
 
 type Cb<T> = (err: Error | null | undefined, res?: T) => void
 
-function call<T = void>(fn: (cb: Cb<T>) => void): Promise<T> {
+export function call<T = void>(fn: (cb: Cb<T>) => void): Promise<T> {
   return new Promise((resolve, reject) => fn((err, res) => (err ? reject(toAppError(err)) : resolve(res as T))))
 }
 
 const noop = () => {}
 const MAX_EDIT_BYTES = 5 * 1024 * 1024
-const PROTECTED = new Set(
-  ['/', '/bin', '/boot', '/dev', '/etc', '/home', '/lib', '/lib64', '/opt', '/proc', '/root', '/run', '/sbin', '/srv', '/sys', '/usr', '/var']
-)
 
-function remotePath(p: unknown): string {
+export function remotePath(p: unknown): string {
   if (typeof p !== 'string' || !p.startsWith('/') || p.includes('\0')) throw new AppError('Caminho inválido.')
   return normalizePath(p)
 }
 
-function statOrNull(sftp: SFTPWrapper, path: string): Promise<Stats | null> {
+export function statOrNull(sftp: SFTPWrapper, path: string): Promise<Stats | null> {
   return new Promise((resolve, reject) =>
     sftp.stat(path, (err, st) => {
       if (!err) return resolve(st)
@@ -151,23 +148,6 @@ export async function rename(id: string, from: string, to: string): Promise<void
   if (src === dest) return
   await assertMissing(sftp, dest)
   await call((cb) => sftp.rename(src, dest, cb))
-}
-
-export async function remove(id: string, paths: string[]): Promise<void> {
-  const s = getSession(id)
-  if (!Array.isArray(paths)) throw new AppError('Seleção inválida.')
-  const targets = paths.map(remotePath)
-  const blocked = targets.find((t) => PROTECTED.has(t) || t === s.info.home)
-  if (blocked) throw new AppError(`Por segurança, "${blocked}" não pode ser excluído pelo VPS Hub.`)
-  for (const path of targets) {
-    const st = await call<Stats>((cb) => s.sftp.lstat(path, cb))
-    if (st.isDirectory()) {
-      const { code, stderr } = await exec(s.client, `rm -rf -- ${shellQuote(path)}`)
-      if (code !== 0) throw new AppError(`Falha ao excluir "${baseName(path)}": ${stderr.trim() || `código ${code}`}`)
-    } else {
-      await call((cb) => s.sftp.unlink(path, cb))
-    }
-  }
 }
 
 async function track(

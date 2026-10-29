@@ -40,6 +40,29 @@ export interface TestResult {
   latencyMs: number
 }
 
+/** Host encontrado no ~/.ssh/config, pronto para virar uma conexão. */
+export interface SshConfigHost {
+  alias: string
+  host: string
+  port: number
+  username: string
+  auth: AuthMethod
+  keyPath: string
+  /** Motivo pelo qual a importação pode não funcionar como está. */
+  warning?: string
+}
+
+/** Item na lixeira da VPS (~/.vpshub-trash). */
+export interface TrashItem {
+  id: string
+  name: string
+  originalPath: string
+  /** Milissegundos desde epoch. */
+  deletedAt: number
+  isDir: boolean
+  size: number
+}
+
 export interface FileEntry {
   name: string
   path: string
@@ -87,6 +110,7 @@ export interface VpsApi {
     test(input: VpsInput, id?: string): Promise<TestResult>
     probe(id: string): Promise<number | null>
     pickKeyFile(): Promise<string | null>
+    readSshConfig(): Promise<SshConfigHost[]>
   }
   session: {
     connect(id: string, secret?: string): Promise<SessionInfo>
@@ -101,13 +125,20 @@ export interface VpsApi {
     createFile(id: string, path: string): Promise<void>
     mkdir(id: string, path: string): Promise<void>
     rename(id: string, from: string, to: string): Promise<void>
-    remove(id: string, paths: string[]): Promise<void>
+    /** Move para a lixeira (retorna os ids na lixeira) ou, se permanent, apaga de vez. */
+    remove(id: string, paths: string[], permanent: boolean): Promise<string[]>
     pickUpload(): Promise<string[]>
     upload(id: string, localPaths: string[], remoteDir: string): Promise<void>
     /** Pergunta a pasta local de destino; retorna null se cancelado. */
     download(id: string, remotePaths: string[]): Promise<string | null>
     revealLocal(path: string): Promise<void>
     pathForFile(file: File): string
+  }
+  trash: {
+    list(id: string): Promise<TrashItem[]>
+    restore(id: string, trashIds: string[]): Promise<void>
+    /** Apaga de vez os itens indicados; sem trashIds, esvazia a lixeira. */
+    purge(id: string, trashIds?: string[]): Promise<void>
   }
   transfers: {
     onProgress(cb: (e: TransferEvent) => void): Unsubscribe

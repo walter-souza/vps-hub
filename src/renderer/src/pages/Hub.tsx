@@ -1,4 +1,4 @@
-import { Copy, KeyRound, Lock, MoreVertical, Pencil, Plug, Plus, Search, Server, Trash2, Unplug } from 'lucide-react'
+import { Copy, FileInput, KeyRound, Lock, MoreVertical, Pencil, Plug, Plus, Search, Server, Trash2, Unplug } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
 import type { VpsConnection } from '../../../shared/types'
 import { ContextMenu, type MenuState } from '../components/ContextMenu'
@@ -9,6 +9,7 @@ import { confirm } from '../lib/dialogs'
 import { relativeTime } from '../lib/format'
 import { toast, useApp } from '../lib/store'
 import { ConnectionForm } from './ConnectionForm'
+import { SshImportDialog } from './SshImportDialog'
 
 type Latency = number | null | undefined // undefined = medindo
 
@@ -18,6 +19,7 @@ export function Hub() {
   const [query, setQuery] = useState('')
   const [tag, setTag] = useState<string | null>(null)
   const [form, setForm] = useState<{ conn?: VpsConnection; duplicate?: boolean } | null>(null)
+  const [importing, setImporting] = useState(false)
   const [latency, setLatency] = useState<Record<string, Latency>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -126,7 +128,7 @@ export function Hub() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="w-48 shrink-0 border-r border-line p-2 text-[13px]" aria-label="Filtros">
+        <nav className="flex w-48 shrink-0 flex-col border-r border-line p-2 text-[13px]" aria-label="Filtros">
           <FilterItem active={!tag} onClick={() => setTag(null)} label="Todas" count={connections.length} />
           {tags.length > 0 && <div className="mt-4 mb-1 px-2 text-[11px] font-semibold tracking-wide text-muted uppercase">Tags</div>}
           {tags.map((t) => (
@@ -138,6 +140,10 @@ export function Hub() {
               count={connections.filter((c) => c.tags.includes(t)).length}
             />
           ))}
+          <div className="flex-1" />
+          <Button variant="ghost" size="sm" onClick={() => setImporting(true)} title="Importar hosts do ~/.ssh/config">
+            <FileInput size={13} /> Importar ~/.ssh/config
+          </Button>
         </nav>
 
         <main className="min-w-0 flex-1 overflow-auto p-6">
@@ -146,9 +152,14 @@ export function Hub() {
               <Server size={40} className="text-muted" />
               <div className="text-base font-semibold">Nenhuma VPS cadastrada</div>
               <p className="max-w-sm text-muted">Adicione uma conexão SSH para navegar e editar os arquivos da sua VPS como no Explorer.</p>
-              <Button variant="primary" onClick={() => setForm({})}>
-                <Plus size={14} /> Adicionar VPS
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="primary" onClick={() => setForm({})}>
+                  <Plus size={14} /> Adicionar VPS
+                </Button>
+                <Button onClick={() => setImporting(true)}>
+                  <FileInput size={14} /> Importar ~/.ssh/config
+                </Button>
+              </div>
             </div>
           ) : visible.length === 0 ? (
             <p className="text-muted">Nenhuma VPS corresponde ao filtro.</p>
@@ -170,6 +181,7 @@ export function Hub() {
         </main>
       </div>
 
+      {importing && <SshImportDialog onClose={() => setImporting(false)} />}
       {form && <ConnectionForm conn={form.conn} duplicate={form.duplicate} onClose={() => setForm(null)} />}
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
     </div>
