@@ -122,3 +122,85 @@ test('nome repetido no destino pede confirmação e a versão anterior vai para 
   await eventually(() => assert.equal(sh(`cat ${DIR}/a/x.txt`), 'x'))
   assert.equal(sh('cat /config/.vpshub-trash/*/x.txt'), 'antigo')
 })
+
+// ---------- Sair de uma pasta aberta por engano durante o arraste ----------
+const sub = () => fileList(win).locator(`[data-path="${DIR}/b/sub"]`)
+const hint = (text) => win.getByRole('status').filter({ hasText: text })
+const backButton = () => win.getByRole('button', { name: 'Voltar (Alt+←)' })
+/** Solta fora de qualquer alvo (cabeçalho do Acesso rápido) e mexe o mouse, como depois de um Esc. */
+const releaseOutside = async () => {
+  await hoverOver(win.getByText('Acesso rápido', { exact: true }))()
+}
+
+test('entrou numa pasta por engano: parar sobre "Voltar" sai dela e o balão mostra a origem', async () => {
+  sh(`cd ${DIR} && echo m > m.txt && echo n > n.txt && echo o > o.txt && echo p > p.txt`)
+  await win.getByRole('button', { name: 'Atualizar (F5)' }).click()
+  await row('m.txt').waitFor()
+  await dragWithMouse(nameCell('m.txt'), [
+    hoverOver(row('b'), 1300),
+    async () => inside(`${DIR}/b`),
+    hoverOver(sub()),
+    async () => {
+      await hint('de /config/dnd · Esc cancela e volta').waitFor()
+      await screenshot(win, 'arrastar-origem')
+    },
+    hoverOver(backButton()),
+    async () => hint('← Voltar para dnd').waitFor(),
+    hoverOver(backButton(), 1300),
+    async () => inside(DIR),
+    hoverOver(row('a'))
+  ])
+  await win.getByText('1 item(ns) movido(s) para a.').waitFor()
+  assert.ok(exists(`${DIR}/a/m.txt`))
+})
+
+test('cancelar o arraste depois de entrar em pastas volta à origem com o item selecionado', async () => {
+  await dragWithMouse(nameCell('n.txt'), [hoverOver(row('b'), 1300), async () => inside(`${DIR}/b`), hoverOver(sub(), 1300), async () => inside(`${DIR}/b/sub`), releaseOutside])
+  await win.mouse.move(400, 400)
+  await inside(DIR)
+  await win.getByRole('option', { name: 'n.txt', selected: true }).waitFor()
+  assert.ok(exists(`${DIR}/n.txt`) && !exists(`${DIR}/b/sub/n.txt`), 'nada foi movido')
+})
+
+test('parar sobre "Pasta acima" sobe um nível durante o arraste', async () => {
+  await dragWithMouse(nameCell('o.txt'), [
+    hoverOver(row('b'), 1300),
+    async () => inside(`${DIR}/b`),
+    hoverOver(sub(), 1300),
+    async () => inside(`${DIR}/b/sub`),
+    hoverOver(win.getByRole('button', { name: 'Pasta acima (Alt+↑)' })),
+    async () => hint('↑ Subir para b').waitFor(),
+    hoverOver(win.getByRole('button', { name: 'Pasta acima (Alt+↑)' }), 1300),
+    async () => inside(`${DIR}/b`),
+    hoverOver(sub())
+  ])
+  await win.getByText('1 item(ns) movido(s) para sub.').waitFor()
+  assert.ok(exists(`${DIR}/b/sub/o.txt`))
+  await win.getByRole('button', { name: 'Pasta acima (Alt+↑)' }).click()
+  await inside(DIR)
+})
+
+test('parar sobre o trecho do caminho da pasta de origem volta para ela', async () => {
+  await dragWithMouse(nameCell('p.txt'), [
+    hoverOver(row('b'), 1300),
+    async () => inside(`${DIR}/b`),
+    hoverOver(win.getByRole('button', { name: 'dnd', exact: true })),
+    async () => hint('Abrir dnd').waitFor(),
+    hoverOver(win.getByRole('button', { name: 'dnd', exact: true }), 1300),
+    async () => inside(DIR),
+    releaseOutside
+  ])
+  await win.mouse.move(400, 400)
+  await win.waitForTimeout(300)
+  await inside(DIR)
+  assert.ok(exists(`${DIR}/p.txt`))
+})
+
+test('soltar num atalho do Acesso rápido move para lá', async () => {
+  await nameCell('p.txt').dragTo(win.getByRole('button', { name: '/tmp' }))
+  const toast = win.getByRole('status').filter({ hasText: '1 item(ns) movido(s) para tmp.' })
+  await toast.waitFor()
+  assert.ok(exists('/tmp/p.txt'))
+  await toast.getByRole('button', { name: 'Desfazer' }).click()
+  await row('p.txt').waitFor()
+})

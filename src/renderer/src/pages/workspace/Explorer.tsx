@@ -514,36 +514,76 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   // Itens arrastados dentro do app ficam num ref: durante o arraste o navegador não deixa ler os dados.
   const dragPaths = useRef<string[] | null>(null)
   const [dragging, setDragging] = useState<Set<string>>(new Set())
-  const [dropHint, setDropHint] = useState<{ key: string; text: string; x: number; y: number } | null>(null)
+  const [dropHint, setDropHint] = useState<{ key: string; text: string; sub?: string; x: number; y: number } | null>(null)
   const spring = useRef<{ key: string; timer: ReturnType<typeof setTimeout> } | null>(null)
+  /**
+   * Sessão de arraste: guarda a pasta de origem e se o app já entrou em outra pasta durante o arraste.
+   * Soltar num alvo válido termina ficando onde está; cancelar (Esc, soltar fora) volta à origem.
+   */
+  const session = useRef<{ origin: string; navigated: boolean } | null>(null)
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
 
   const disarmSpring = () => {
     if (spring.current) clearTimeout(spring.current.timer)
     spring.current = null
   }
-  const endDrag = useCallback(() => {
+  const finishDrag = useCallback((cancelled: boolean) => {
+    const s = session.current
+    const paths = dragPaths.current ?? []
+    session.current = null
     dragPaths.current = null
     setDragging(new Set())
     setDropHint(null)
     disarmSpring()
+    if (cancelled && s?.navigated && cwdRef.current !== s.origin) navigateRef.current(s.origin, paths)
   }, [])
   useEffect(() => {
-    // Se a linha de origem sumir (pasta aberta durante o arraste), o dragend não chega até aqui;
-    // o primeiro movimento de mouse depois do arraste encerra o estado.
-    const onMove = () => dragPaths.current && endDrag()
-    window.addEventListener('dragend', endDrag)
+    // dragend sem efeito = cancelado. Se a linha de origem sumiu (o app entrou numa pasta durante o
+    // arraste), o dragend não chega até aqui; aí o primeiro movimento de mouse sem botão pressionado
+    // (o arraste já acabou) avisa.
+    const onEnd = (e: globalThis.DragEvent) => finishDrag(e.dataTransfer?.dropEffect === 'none')
+    const onMove = (e: globalThis.MouseEvent) => e.buttons === 0 && (session.current || dragPaths.current) && finishDrag(true)
+    window.addEventListener('dragend', onEnd)
     window.addEventListener('mousemove', onMove)
     return () => {
-      window.removeEventListener('dragend', endDrag)
+      window.removeEventListener('dragend', onEnd)
       window.removeEventListener('mousemove', onMove)
     }
-  }, [endDrag])
+  }, [finishDrag])
+
+  /** Abre a pasta se o cursor ficar ~1 s parado sobre o alvo (inicia a sessão para poder voltar). */
+  const armSpring = (key: string, go: () => void) => {
+    if (spring.current?.key === key) return
+    disarmSpring()
+    spring.current = {
+      key,
+      timer: setTimeout(() => {
+        spring.current = null
+        const s = (session.current ??= { origin: cwdRef.current, navigated: false })
+        s.navigated = true
+        go()
+      }, 900)
+    }
+  }
+  const isDragging = (e: DragEvent) => !!dragPaths.current || e.dataTransfer.types.includes('Files')
+  /** Linha extra do balão depois que o arraste já entrou em outra pasta. */
+  const originHint = () => {
+    const s = session.current
+    return s?.navigated && s.origin !== cwdRef.current ? `de ${s.origin} · Esc cancela e volta` : undefined
+  }
+  const leaveTarget = (key: string) => (e: DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setDropHint((h) => (h?.key === key ? null : h))
+    if (spring.current?.key === key) disarmSpring()
+  }
 
   const startItemDrag = (e: DragEvent, entry: FileEntry) => {
     const list = selected.has(entry.path) ? selection : [entry]
     if (!selected.has(entry.path)) click(entry.path, { ctrlKey: false, shiftKey: false })
     const paths = list.map((x) => x.path)
     dragPaths.current = paths
+    session.current = { origin: cwdRef.current, navigated: false }
     setDragging(new Set(paths))
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ vpsId: id, paths }))
     e.dataTransfer.effectAllowed = 'copyMove'
@@ -593,44 +633,60 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     })
   }
 
-  /** Props de um alvo de soltar. springOpen = abrir a pasta se o cursor ficar parado sobre ela. */
+  /**
+   * Props de um alvo de soltar. springOpen = pasta que abre se o cursor ficar parado sobre o alvo; vale
+   * mesmo onde não dá para soltar (ex.: o trecho do caminho da própria pasta de origem).
+   */
   const dropProps = (target: DropTarget, springOpen?: string) => {
     const key = target === 'trash' ? 'trash' : target.dir
     const over = (e: DragEvent) => {
       e.stopPropagation() // o alvo mais interno decide (pasta da linha > pasta atual)
       const action = resolveDrop(e, target)
-      if (!action) {
+      const canSpring =
+        !!springOpen &&
+        isDragging(e) &&
+        springOpen !== cwdRef.current &&
+        !(dragPaths.current ?? []).some((p) => springOpen === p || springOpen.startsWith(`${p}/`))
+      let text: string | null = null
+      if (action) {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = action.op === 'copy' || action.op === 'upload' ? 'copy' : 'move'
+        text = `→ ${action.text}`
+      } else {
         e.dataTransfer.dropEffect = 'none'
-        setDropHint(null)
-        return disarmSpring()
+        if (canSpring) text = `Abrir ${dirLabel(springOpen)}`
       }
-      e.preventDefault()
-      e.dataTransfer.dropEffect = action.op === 'copy' || action.op === 'upload' ? 'copy' : 'move'
-      setDropHint({ key, text: action.text, x: e.clientX, y: e.clientY })
-      if (springOpen && spring.current?.key !== key) {
-        disarmSpring()
-        spring.current = { key, timer: setTimeout(() => ((spring.current = null), navigate(springOpen)), 900) }
-      }
+      setDropHint(text ? { key, text, sub: originHint(), x: e.clientX, y: e.clientY } : null)
+      if (canSpring) armSpring(key, () => navigate(springOpen))
+      else if (spring.current?.key === key) disarmSpring()
     }
     return {
       onDragEnter: over,
       onDragOver: over,
-      onDragLeave: (e: DragEvent) => {
-        if (e.currentTarget.contains(e.relatedTarget as Node)) return
-        setDropHint((h) => (h?.key === key ? null : h))
-        if (spring.current?.key === key) disarmSpring()
-      },
+      onDragLeave: leaveTarget(key),
       onDrop: (e: DragEvent) => {
         e.stopPropagation()
         const action = resolveDrop(e, target)
         const paths = dragPaths.current ?? []
-        endDrag()
+        finishDrag(!action)
         if (!action) return
         e.preventDefault()
         const files = action.op === 'upload' ? [...e.dataTransfer.files].map((f) => api.fs.pathForFile(f)).filter(Boolean) : []
         performDrop(action, paths, files)
       }
     }
+  }
+
+  /** Botões de navegação (Voltar, Pasta acima): só navegam ao parar em cima durante um arraste. */
+  const navSpringProps = (key: string, label: string | null, go: () => void) => {
+    const over = (e: DragEvent) => {
+      if (!label || !isDragging(e)) return
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'none'
+      setDropHint({ key, text: label, sub: originHint(), x: e.clientX, y: e.clientY })
+      armSpring(key, go)
+    }
+    return { onDragEnter: over, onDragOver: over, onDragLeave: leaveTarget(key) }
   }
 
   /** Rola a lista ao arrastar perto das bordas. */
@@ -675,9 +731,23 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     <div className={`absolute inset-0 flex flex-col ${hidden ? 'hidden' : ''}`} onKeyDown={onKeyDown}>
       {/* Barra de navegação */}
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line bg-panel px-2">
-        <NavButton label="Voltar (Alt+←)" onClick={back} disabled={hist.back.length === 0} icon={ArrowLeft} />
+        <NavButton
+          label="Voltar (Alt+←)"
+          onClick={back}
+          disabled={hist.back.length === 0}
+          icon={ArrowLeft}
+          active={dropHint?.key === 'nav:back'}
+          drop={navSpringProps('nav:back', hist.back.length ? `← Voltar para ${dirLabel(hist.back[hist.back.length - 1])}` : null, back)}
+        />
         <NavButton label="Avançar (Alt+→)" onClick={forward} disabled={hist.fwd.length === 0} icon={ArrowRight} />
-        <NavButton label="Pasta acima (Alt+↑)" onClick={up} disabled={cwd === '/'} icon={ArrowUp} />
+        <NavButton
+          label="Pasta acima (Alt+↑)"
+          onClick={up}
+          disabled={cwd === '/'}
+          icon={ArrowUp}
+          active={dropHint?.key === 'nav:up'}
+          drop={navSpringProps('nav:up', cwd === '/' ? null : `↑ Subir para ${dirLabel(parentPath(cwd))}`, up)}
+        />
         <NavButton label="Atualizar (F5)" onClick={() => refresh()} icon={loading ? Loader2 : RefreshCw} spin={loading} />
 
         <div className="mx-1 flex h-7 min-w-0 flex-1 items-center rounded-md border border-line bg-bg">
@@ -704,7 +774,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
               onClick={(e) => e.target === e.currentTarget && setEditingPath(cwd)}
               title="Clique para digitar um caminho (Ctrl+L)"
             >
-              <Crumb label="/" onClick={() => navigate('/')} active={dropHint?.key === '/'} drop={dropProps({ dir: '/' })} />
+              <Crumb label="/" onClick={() => navigate('/')} active={dropHint?.key === '/'} drop={dropProps({ dir: '/' }, '/')} />
               {segments.map((seg, i) => (
                 <span key={i} className="flex min-w-0 items-center">
                   {i > 0 && <ChevronRight size={12} className="shrink-0 text-muted" />}
@@ -712,7 +782,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
                     label={seg}
                     onClick={() => navigate('/' + segments.slice(0, i + 1).join('/'))}
                     active={dropHint?.key === '/' + segments.slice(0, i + 1).join('/')}
-                    drop={dropProps({ dir: '/' + segments.slice(0, i + 1).join('/') })}
+                    drop={dropProps({ dir: '/' + segments.slice(0, i + 1).join('/') }, '/' + segments.slice(0, i + 1).join('/'))}
                   />
                 </span>
               ))}
@@ -752,7 +822,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
               key={p.path}
               onClick={() => navigate(p.path)}
               title={p.path}
-              className={`flex h-7 w-full items-center gap-2 px-3 text-left ${view === 'files' && cwd === p.path ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
+              {...dropProps({ dir: p.path }, p.path)}
+              className={`flex h-7 w-full items-center gap-2 px-3 text-left ${dropHint?.key === p.path ? 'bg-accent/40 text-fg ring-1 ring-accent ring-inset' : view === 'files' && cwd === p.path ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
             >
               <p.icon size={14} className="shrink-0" />
               <span className="truncate">{p.label}</span>
@@ -871,7 +942,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
           className="pointer-events-none fixed z-[70] rounded-md border border-line bg-panel-2 px-2 py-1 text-xs shadow-lg"
           style={{ left: dropHint.x + 16, top: dropHint.y + 18 }}
         >
-          → {dropHint.text}
+          {dropHint.text}
+          {dropHint.sub && <div className="mt-0.5 text-[11px] text-muted">{dropHint.sub}</div>}
         </div>
       )}
       {compressFor && (
@@ -892,14 +964,25 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   )
 }
 
-function NavButton({ label, onClick, disabled, icon: Icon, spin }: { label: string; onClick: () => void; disabled?: boolean; icon: typeof Home; spin?: boolean }) {
+interface NavButtonProps {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  icon: typeof Home
+  spin?: boolean
+  active?: boolean
+  drop?: object
+}
+
+function NavButton({ label, onClick, disabled, icon: Icon, spin, active, drop }: NavButtonProps) {
   return (
     <button
       aria-label={label}
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-hover hover:text-fg disabled:opacity-30"
+      {...drop}
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-hover hover:text-fg disabled:opacity-30 ${active ? 'bg-accent/40 text-fg ring-1 ring-accent' : ''}`}
     >
       <Icon size={15} className={spin ? 'animate-spin' : ''} />
     </button>
