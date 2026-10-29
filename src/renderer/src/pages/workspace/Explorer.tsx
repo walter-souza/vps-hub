@@ -186,7 +186,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     try {
       await fn()
     } catch (e) {
-      toast('error', errMsg(e))
+      if (errCode(e) !== 'CANCELLED') toast('error', errMsg(e))
     }
   }
 

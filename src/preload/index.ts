@@ -58,7 +58,9 @@ const api: VpsApi = {
     purge: (id, trashIds) => invoke('trash:purge', id, trashIds)
   },
   transfers: {
-    onProgress: (cb) => on('transfer:progress', cb)
+    onProgress: (cb) => on('transfer:progress', cb),
+    cancel: (transferId) => invoke('transfers:cancel', transferId),
+    retry: (transferId) => invoke('transfers:retry', transferId)
   },
   terminal: {
     open: (termId, vpsId, cwd, cols, rows) => invoke('terminal:open', termId, vpsId, cwd, cols, rows),

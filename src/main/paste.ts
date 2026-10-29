@@ -1,10 +1,8 @@
-import { Transform } from 'node:stream'
-import { pipeline } from 'node:stream/promises'
 import type { FileEntryWithStats, Stats } from 'ssh2'
 import { baseName, copyName, joinPath, parentPath } from '../shared/paths'
 import type { PasteMode } from '../shared/types'
 import { AppError } from './errors'
-import { call, remotePath, statOrNull, track } from './files'
+import { call, remotePath, statOrNull, streamCopy, track } from './files'
 import { getSession, sh, shellQuote, type Session } from './sessions'
 import { assertRemovable, deletePermanently, moveToTrash } from './trash'
 
@@ -24,17 +22,9 @@ async function copyAcross(src: Session, dst: Session, from: string, to: string):
     }
     return
   }
-  await track(dst.info.id, baseName(from), 'copy', st.size, async (step) => {
-    let done = 0
-    const progress = new Transform({
-      transform(chunk: Buffer, _enc, cb) {
-        done += chunk.length
-        step(done)
-        cb(null, chunk)
-      }
-    })
-    await pipeline(src.sftp.createReadStream(from), progress, dst.sftp.createWriteStream(to, { mode }))
-  })
+  await track(dst.info.id, baseName(from), 'copy', st.size, (step, signal) =>
+    streamCopy(src.sftp.createReadStream(from), dst.sftp.createWriteStream(to, { mode }), step, signal)
+  )
 }
 
 /**

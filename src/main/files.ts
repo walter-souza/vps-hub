@@ -1,7 +1,9 @@
 import { dialog, shell } from 'electron'
 import { randomBytes, randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
-import { mkdir, readdir, stat } from 'node:fs/promises'
+import { createReadStream, createWriteStream, existsSync } from 'node:fs'
+import { mkdir, readdir, rm, stat } from 'node:fs/promises'
+import { Transform, type Readable, type Writable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { basename, extname, join } from 'node:path'
 import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2'
 import { baseName, joinPath, normalizePath, parentPath } from '../shared/paths'
@@ -152,14 +154,41 @@ export async function rename(id: string, from: string, to: string): Promise<void
   await call((cb) => sftp.rename(src, dest, cb))
 }
 
-export async function track(
-  vpsId: string,
-  name: string,
-  direction: TransferEvent['direction'],
-  total: number,
-  run: (step: (transferred: number) => void) => Promise<void>
+type Run = (step: (transferred: number) => void, signal: AbortSignal) => Promise<void>
+
+interface Job {
+  ev: TransferEvent
+  run: Run
+  abort?: AbortController
+}
+
+/** Transferências que ainda podem ser repetidas (as concluídas saem daqui). */
+const jobs = new Map<string, Job>()
+const MAX_JOBS = 100
+
+/** Copia um stream para outro contando bytes; o signal interrompe no meio do arquivo. */
+export async function streamCopy(
+  from: Readable,
+  to: Writable,
+  step: (transferred: number) => void,
+  signal: AbortSignal
 ): Promise<void> {
-  const ev: TransferEvent = { id: randomUUID(), vpsId, name, direction, transferred: 0, total, status: 'running' }
+  let done = 0
+  const progress = new Transform({
+    transform(chunk: Buffer, _enc, cb) {
+      done += chunk.length
+      step(done)
+      cb(null, chunk)
+    }
+  })
+  await pipeline(from, progress, to, { signal })
+}
+
+async function execute(job: Job): Promise<void> {
+  const { ev } = job
+  const abort = new AbortController()
+  job.abort = abort
+  Object.assign(ev, { transferred: 0, status: 'running', error: undefined })
   emit('transfer:progress', { ...ev })
   let last = 0
   const step = (transferred: number) => {
@@ -170,12 +199,42 @@ export async function track(
     emit('transfer:progress', { ...ev })
   }
   try {
-    await run(step)
-    emit('transfer:progress', { ...ev, transferred: total, status: 'done' })
+    await job.run(step, abort.signal)
+    jobs.delete(ev.id)
+    emit('transfer:progress', { ...ev, transferred: ev.total, status: 'done' })
   } catch (e) {
+    job.abort = undefined
+    if (abort.signal.aborted) {
+      emit('transfer:progress', { ...ev, status: 'cancelled' })
+      throw new AppError('Transferência cancelada.', 'CANCELLED')
+    }
     emit('transfer:progress', { ...ev, status: 'error', error: toAppError(e).message })
     throw e
   }
+  job.abort = undefined
+}
+
+export async function track(vpsId: string, name: string, direction: TransferEvent['direction'], total: number, run: Run): Promise<void> {
+  const ev: TransferEvent = { id: randomUUID(), vpsId, name, direction, transferred: 0, total, status: 'running' }
+  const job: Job = { ev, run }
+  jobs.set(ev.id, job)
+  for (const old of jobs.keys()) {
+    if (jobs.size <= MAX_JOBS) break
+    if (!jobs.get(old)?.abort) jobs.delete(old)
+  }
+  await execute(job)
+}
+
+export async function cancelTransfer(transferId: string): Promise<void> {
+  jobs.get(transferId)?.abort?.abort()
+}
+
+export async function retryTransfer(transferId: string): Promise<void> {
+  const job = jobs.get(transferId)
+  if (!job) throw new AppError('Esta transferência não pode mais ser repetida.')
+  if (job.abort) return
+  getSession(job.ev.vpsId) // falha com NOT_CONNECTED se a VPS caiu
+  await execute(job)
 }
 
 async function uploadItem(s: Session, local: string, remote: string): Promise<void> {
@@ -185,9 +244,14 @@ async function uploadItem(s: Session, local: string, remote: string): Promise<vo
     for (const name of await readdir(local)) await uploadItem(s, join(local, name), joinPath(remote, name))
     return
   }
-  await track(s.info.id, basename(local), 'up', st.size, (step) =>
-    call((cb) => s.sftp.fastPut(local, remote, { step: (t) => step(t) }, cb))
-  )
+  await track(s.info.id, basename(local), 'up', st.size, async (step, signal) => {
+    try {
+      await streamCopy(createReadStream(local), s.sftp.createWriteStream(remote), step, signal)
+    } catch (e) {
+      await call((cb) => s.sftp.unlink(remote, cb)).catch(noop) // não deixa arquivo pela metade
+      throw e
+    }
+  })
 }
 
 export async function upload(id: string, localPaths: string[], remoteDir: string): Promise<void> {
@@ -221,9 +285,14 @@ async function downloadItem(s: Session, remote: string, local: string): Promise<
     }
     return
   }
-  await track(s.info.id, baseName(remote), 'down', st.size, (step) =>
-    call((cb) => s.sftp.fastGet(remote, local, { step: (t) => step(t) }, cb))
-  )
+  await track(s.info.id, baseName(remote), 'down', st.size, async (step, signal) => {
+    try {
+      await streamCopy(s.sftp.createReadStream(remote), createWriteStream(local), step, signal)
+    } catch (e) {
+      await rm(local, { force: true }).catch(noop)
+      throw e
+    }
+  })
 }
 
 export async function download(id: string, remotePaths: string[]): Promise<string | null> {

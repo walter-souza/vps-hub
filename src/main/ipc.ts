@@ -69,6 +69,8 @@ export function registerIpc(): void {
   handle('fs:upload', files.upload)
   handle('fs:download', files.download)
   handle('fs:revealLocal', files.revealLocal)
+  handle('transfers:cancel', files.cancelTransfer)
+  handle('transfers:retry', files.retryTransfer)
 
   handle('trash:list', trash.list)
   handle('trash:restore', trash.restore)

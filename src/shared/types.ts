@@ -153,7 +153,7 @@ export interface TransferEvent {
   direction: 'up' | 'down' | 'copy'
   transferred: number
   total: number
-  status: 'running' | 'done' | 'error'
+  status: 'running' | 'done' | 'error' | 'cancelled'
   error?: string
 }
 
@@ -219,6 +219,10 @@ export interface VpsApi {
   }
   transfers: {
     onProgress(cb: (e: TransferEvent) => void): Unsubscribe
+    /** Interrompe a transferência em andamento (e o restante do lote). */
+    cancel(transferId: string): Promise<void>
+    /** Refaz uma transferência que falhou ou foi cancelada. */
+    retry(transferId: string): Promise<void>
   }
   terminal: {
     open(termId: string, vpsId: string, cwd: string, cols: number, rows: number): Promise<void>

@@ -1,11 +1,15 @@
-import { ArrowDown, ArrowUp, CheckCircle2, Copy, XCircle } from 'lucide-react'
+import { ArrowDown, ArrowUp, Ban, CheckCircle2, Copy, RotateCw, X, XCircle } from 'lucide-react'
 import { Button } from '../../components/ui'
+import { api, errMsg } from '../../lib/api'
 import { formatSize } from '../../lib/format'
 import { useApp } from '../../lib/store'
 
 export function Transfers({ vpsId }: { vpsId: string }) {
   const all = useApp((s) => s.transfers)
   const clear = useApp((s) => s.clearTransfers)
+  const toast = useApp((s) => s.toast)
+  const retry = (id: string) =>
+    api.transfers.retry(id).catch((e) => (e as { code?: string })?.code !== 'CANCELLED' && toast('error', errMsg(e)))
   const items = all.filter((t) => t.vpsId === vpsId)
 
   if (items.length === 0) {
@@ -42,12 +46,27 @@ export function Transfers({ vpsId }: { vpsId: string }) {
               <span className="w-36 text-right text-xs text-muted">
                 {formatSize(t.transferred)} / {formatSize(t.total)}
               </span>
-              <span className="w-5">
+              <span className="flex w-12 items-center justify-end gap-1">
                 {t.status === 'done' && <CheckCircle2 size={14} className="text-ok" />}
                 {t.status === 'error' && (
                   <span title={t.error}>
                     <XCircle size={14} className="text-danger" />
                   </span>
+                )}
+                {t.status === 'cancelled' && (
+                  <span title="Cancelada">
+                    <Ban size={14} className="text-muted" />
+                  </span>
+                )}
+                {t.status === 'running' && (
+                  <button aria-label={`Cancelar ${t.name}`} title="Cancelar" className="rounded p-0.5 text-muted hover:bg-panel-2 hover:text-text" onClick={() => api.transfers.cancel(t.id)}>
+                    <X size={14} />
+                  </button>
+                )}
+                {(t.status === 'error' || t.status === 'cancelled') && (
+                  <button aria-label={`Tentar de novo ${t.name}`} title="Tentar de novo" className="rounded p-0.5 text-muted hover:bg-panel-2 hover:text-text" onClick={() => retry(t.id)}>
+                    <RotateCw size={14} />
+                  </button>
                 )}
               </span>
             </li>
