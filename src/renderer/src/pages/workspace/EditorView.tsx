@@ -25,9 +25,11 @@ interface Props {
   onReload: () => void
   /** Chamado após rolar até file.reveal, para não repetir ao voltar à aba. */
   onRevealed: () => void
+  /** Abre outro arquivo da VPS (links relativos da pré-visualização de Markdown). */
+  onOpenPath: (path: string) => void
 }
 
-export function EditorView({ vpsId, file, onChange, onSave, onReload, onRevealed }: Props) {
+export function EditorView({ vpsId, file, onChange, onSave, onReload, onRevealed, onOpenPath }: Props) {
   const saveRef = useRef(onSave)
   saveRef.current = onSave
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -89,7 +91,7 @@ export function EditorView({ vpsId, file, onChange, onSave, onReload, onRevealed
         </div>
         {markdown && preview && (
           <div className="min-h-0 w-1/2 min-w-0">
-            <MarkdownPreview source={previewSource} />
+            <MarkdownPreview source={previewSource} path={file.path} vpsId={vpsId} onOpenPath={onOpenPath} />
           </div>
         )}
       </div>

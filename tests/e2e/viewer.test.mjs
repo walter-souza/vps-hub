@@ -1,7 +1,7 @@
 // Visualizador de imagens: abrir, zoom, SVG sem executar script, limite de tamanho.
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { dialogBox, dockerSh, fileList, launchApp, saveConnection, state } from './helpers.mjs'
+import { dialogBox, dockerSh, eventually, fileList, launchApp, saveConnection, state } from './helpers.mjs'
 
 const S = state()
 const A = S.a
@@ -81,8 +81,6 @@ test('Markdown abre com pré-visualização ao lado, atualizada ao digitar e sem
   await win.keyboard.press('Control+Home')
   await win.keyboard.type('## Novo\n')
   await preview.getByRole('heading', { name: 'Novo' }).waitFor()
-  await preview.getByRole('link', { name: 'site' }).click()
-  assert.ok(win.url().startsWith('file:'), 'clicar em link não navega a janela')
 
   await win.getByRole('button', { name: 'Pré-visualizar' }).click()
   await preview.waitFor({ state: 'detached' })
@@ -90,4 +88,42 @@ test('Markdown abre com pré-visualização ao lado, atualizada ao digitar e sem
   await win.getByRole('button', { name: 'Recarregar' }).click()
   await dialogBox(win, 'Descartar alterações?').getByRole('button', { name: 'Recarregar' }).click()
   await win.getByText('Não salvo').waitFor({ state: 'detached' })
+})
+
+test('Markdown: imagens relativas carregam da VPS, externas ficam bloqueadas e links funcionam', async () => {
+  sh(`cd ${DIR} && mkdir -p docs && cp pixel.png docs/ && printf '# Topo
+
+![local](docs/pixel.png)
+
+[![badge](https://img.shields.io/x.svg)](https://example.com/ci)
+
+[abrir texto](falso.txt) e [site](https://example.com)
+
+[ir ao fim](#fim)
+
+## Fim
+' > docs.md`)
+  await app.evaluate(({ shell }) => {
+    globalThis.__opened = []
+    shell.openExternal = async (url) => void globalThis.__opened.push(url)
+  })
+  await win.getByRole('tab', { name: 'Arquivos' }).click()
+  await win.getByRole('button', { name: 'Atualizar (F5)' }).click()
+  await row('docs.md').dblclick()
+  const preview = win.getByRole('document', { name: 'Pré-visualização' })
+  await preview.locator('img[alt="local"]').waitFor()
+  await win.waitForFunction(() => document.querySelector('img[alt="local"]')?.src.startsWith('blob:'))
+  assert.equal(await preview.locator('img[alt="local"]').evaluate((el) => el.naturalWidth), 1, 'imagem relativa lida da VPS')
+  assert.equal(await preview.locator('img[alt="badge"]').count(), 0, 'imagem externa não é carregada')
+  await preview.locator('.markdown-img-blocked', { hasText: 'badge' }).waitFor()
+
+  await preview.getByRole('link', { name: 'site' }).click()
+  await eventually(async () => assert.deepEqual(await app.evaluate(() => globalThis.__opened), ['https://example.com/']))
+  assert.ok(win.url().startsWith('file:'), 'a janela não navega')
+
+  await preview.getByRole('link', { name: 'ir ao fim' }).click()
+  assert.equal(await preview.locator('#fim').count(), 1, 'títulos ganham âncora')
+
+  await preview.getByRole('link', { name: 'abrir texto' }).click()
+  await win.getByRole('tab', { name: /falso\.txt/ }).waitFor()
 })

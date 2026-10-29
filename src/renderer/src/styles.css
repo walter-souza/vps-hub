@@ -95,3 +95,5 @@ textarea {
 .markdown img { max-width: 100%; }
 .markdown hr { border: 0; border-top: 1px solid var(--color-line); margin: 1.5em 0; }
 .markdown input[type='checkbox'] { margin-right: 0.4em; }
+.markdown .markdown-img-blocked { display: inline-block; color: var(--color-muted); background: var(--color-panel-2); border: 1px dashed var(--color-line); border-radius: 4px; padding: 0 0.4em; font-size: 0.85em; }
+.markdown a:has(.markdown-img-blocked) { text-decoration: none; }

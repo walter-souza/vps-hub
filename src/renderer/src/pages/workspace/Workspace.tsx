@@ -241,6 +241,7 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onSave={() => saveFile(f.path)}
               onReload={() => reloadFile(f.path)}
               onRevealed={() => patchFile(f.path, { reveal: undefined })}
+              onOpenPath={(p) => openFile(p)}
             />
           ))}
         {images
