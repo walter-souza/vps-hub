@@ -10,6 +10,8 @@ import {
   ChevronUp,
   ClipboardCopy,
   Download,
+  FileArchive,
+  FolderInput,
   Eye,
   EyeOff,
   FilePlus,
@@ -27,15 +29,16 @@ import {
   Upload
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
-import { baseName, joinPath, normalizePath, parentPath, validateName } from '../../../../shared/paths'
-import type { FileEntry, PasteMode, SessionInfo, VpsConnection } from '../../../../shared/types'
+import { archiveInfo, baseName, joinPath, normalizePath, parentPath, validateName } from '../../../../shared/paths'
+import type { ExtractMode, FileEntry, PasteMode, SessionInfo, VpsConnection } from '../../../../shared/types'
 import { ContextMenu, type MenuEntry, type MenuState } from '../../components/ContextMenu'
 import { FileIcon } from '../../components/FileIcon'
-import { api, errMsg } from '../../lib/api'
+import { api, errCode, errMsg } from '../../lib/api'
 import { confirm, prompt } from '../../lib/dialogs'
 import { formatDate, formatSize } from '../../lib/format'
 import { toast, useApp } from '../../lib/store'
 import { SearchView } from './SearchView'
+import { CompressDialog } from './CompressDialog'
 import { PermissionsDialog } from './PermissionsDialog'
 import { TrashView } from './TrashView'
 
@@ -85,6 +88,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   const [view, setView] = useState<'files' | 'trash' | 'search'>('files')
   const [search, setSearch] = useState({ term: '', key: 0 })
   const [permsFor, setPermsFor] = useState<FileEntry[] | null>(null)
+  const [compressFor, setCompressFor] = useState<FileEntry[] | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadSeq = useRef(0)
   const closeMenu = useCallback(() => setMenu(null), [])
@@ -341,6 +345,32 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     })
   }
 
+  /** Extrai um arquivo; em "aqui", conflitos pedem confirmação e os itens atuais vão para a lixeira. */
+  const extract = async (archive: FileEntry, mode: ExtractMode) => {
+    setLoading(true)
+    let created: string[] = []
+    try {
+      try {
+        created = await api.fs.extract(id, archive.path, mode, false)
+      } catch (e) {
+        if (errCode(e) !== 'EXISTS') throw e
+        const ok = await confirm({
+          title: 'Substituir itens existentes?',
+          message: `${errMsg(e)}. Os atuais serão movidos para a lixeira.`,
+          confirmLabel: 'Substituir',
+          danger: true
+        })
+        if (!ok) return
+        created = await api.fs.extract(id, archive.path, mode, true)
+      }
+      toast('success', `${archive.name} extraído.`)
+    } catch (e) {
+      toast('error', errMsg(e))
+    } finally {
+      await refresh(created)
+    }
+  }
+
   const copyPath = (path: string) => navigator.clipboard.writeText(path).then(() => toast('info', 'Caminho copiado.'))
 
   // ---------- Seleção e eventos ----------
@@ -398,7 +428,16 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       )
       if (entry.isDir) items.push({ label: 'Abrir terminal aqui', icon: SquareTerminal, onClick: () => onOpenTerminal(entry.path) })
     }
-    items.push({ label: 'Permissões e dono…', icon: ShieldCheck, shortcut: 'Alt+Enter', onClick: () => setPermsFor(list) }, 'sep')
+    items.push({ label: 'Permissões e dono…', icon: ShieldCheck, shortcut: 'Alt+Enter', onClick: () => setPermsFor(list) })
+    items.push({ label: 'Compactar…', icon: FileArchive, onClick: () => setCompressFor(list) })
+    const archive = single && !entry.isDir ? archiveInfo(entry.name) : null
+    if (archive) {
+      items.push(
+        { label: `Extrair para "${archive.stem}/"`, icon: FolderInput, onClick: () => extract(entry, 'folder') },
+        { label: 'Extrair aqui', icon: FolderInput, onClick: () => extract(entry, 'here') }
+      )
+    }
+    items.push('sep')
     if (!isTrashPath(cwd)) items.push({ label: 'Mover para a lixeira', icon: Trash2, shortcut: 'Del', onClick: () => remove(list) })
     items.push({ label: 'Excluir permanentemente', icon: Trash2, shortcut: 'Shift+Del', danger: true, onClick: () => remove(list, true) })
     setMenu({ x: e.clientX, y: e.clientY, items })
@@ -678,6 +717,17 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       </div>
 
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
+      {compressFor && (
+        <CompressDialog
+          vpsId={id}
+          entries={compressFor}
+          onClose={() => setCompressFor(null)}
+          onDone={(path) => {
+            toast('success', `${baseName(path)} criado.`)
+            refresh([path])
+          }}
+        />
+      )}
       {permsFor && (
         <PermissionsDialog vpsId={id} entries={permsFor} onClose={() => setPermsFor(null)} onApplied={() => refresh(permsFor.map((e) => e.path))} />
       )}

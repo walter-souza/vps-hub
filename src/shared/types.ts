@@ -65,6 +65,10 @@ export interface TrashItem {
 
 export type PasteMode = 'copy' | 'cut'
 
+export type ArchiveFormat = 'zip' | 'tar.gz'
+/** folder = extrai numa pasta nova com o nome do arquivo; here = na própria pasta do arquivo. */
+export type ExtractMode = 'folder' | 'here'
+
 export interface PermChange {
   /** Bits (0o777) a ligar e a desligar; os demais ficam como estão em cada item. */
   set: number
@@ -184,6 +188,10 @@ export interface VpsApi {
     cancelSearch(searchId: string): Promise<void>
     setPermissions(id: string, paths: string[], change: PermChange): Promise<void>
     accounts(id: string): Promise<Accounts>
+    /** Compacta itens de uma mesma pasta; retorna o caminho do arquivo criado. */
+    compress(id: string, paths: string[], format: ArchiveFormat, name: string): Promise<string>
+    /** Extrai; com replace, itens que seriam sobrescritos vão para a lixeira. Retorna os caminhos criados. */
+    extract(id: string, archive: string, mode: ExtractMode, replace: boolean): Promise<string[]>
     pickUpload(): Promise<string[]>
     upload(id: string, localPaths: string[], remoteDir: string): Promise<void>
     /** Pergunta a pasta local de destino; retorna null se cancelado. */

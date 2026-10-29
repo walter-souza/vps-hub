@@ -30,6 +30,19 @@ export function copyName(name: string, n: number, isDir: boolean): string {
   return `${stem} - cópia${n > 1 ? ` (${n})` : ''}${ext}`
 }
 
+export type ArchiveKind = 'zip' | 'tar' | 'tar.gz' | 'tar.bz2' | 'tar.xz'
+
+const ARCHIVE_EXTS: [string, ArchiveKind][] = [
+  ['.tar.gz', 'tar.gz'], ['.tgz', 'tar.gz'], ['.tar.bz2', 'tar.bz2'], ['.tbz2', 'tar.bz2'],
+  ['.tar.xz', 'tar.xz'], ['.txz', 'tar.xz'], ['.tar', 'tar'], ['.zip', 'zip']
+]
+
+/** Tipo de arquivo compactado e nome sem extensão, ou null se o app não souber extraí-lo. */
+export function archiveInfo(name: string): { kind: ArchiveKind; stem: string } | null {
+  const match = ARCHIVE_EXTS.find(([ext]) => name.toLowerCase().endsWith(ext))
+  return match && name.length > match[0].length ? { kind: match[1], stem: name.slice(0, -match[0].length) } : null
+}
+
 /** Retorna mensagem de erro, ou null se o nome for válido para um item. */
 export function validateName(name: string): string | null {
   if (!name.trim()) return 'Informe um nome.'
