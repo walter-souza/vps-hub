@@ -9,7 +9,7 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dist": "electron-vite build && electron-builder --win",
-    "test:e2e": "electron-vite build && node --test --test-concurrency=1 --test-global-setup=tests/e2e/setup.mjs tests/e2e/core.test.mjs tests/e2e/archive.test.mjs tests/e2e/import-trash.test.mjs tests/e2e/paste.test.mjs tests/e2e/perms.test.mjs tests/e2e/search.test.mjs"
+    "test:e2e": "electron-vite build && node --test --test-concurrency=1 --test-global-setup=tests/e2e/setup.mjs tests/e2e/core.test.mjs tests/e2e/archive.test.mjs tests/e2e/import-trash.test.mjs tests/e2e/paste.test.mjs tests/e2e/perms.test.mjs tests/e2e/search.test.mjs tests/e2e/selection.test.mjs"
   },
   "author": "",
   "type": "commonjs",

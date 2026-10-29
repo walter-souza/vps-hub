@@ -40,6 +40,7 @@ import { toast, useApp } from '../../lib/store'
 import { SearchView } from './SearchView'
 import { CompressDialog } from './CompressDialog'
 import { PermissionsDialog } from './PermissionsDialog'
+import { ROW_HEIGHT, useListSelection, useMarquee, useTypeAhead } from './selection'
 import { TrashView } from './TrashView'
 
 type SortKey = 'name' | 'size' | 'mtime'
@@ -76,8 +77,6 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [hist, setHist] = useState<{ back: string[]; fwd: string[] }>({ back: [], fwd: [] })
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [anchor, setAnchor] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: 'name', asc: true })
   const [showHidden, setShowHidden] = useState(true)
   const [filter, setFilter] = useState('')
@@ -95,7 +94,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
 
   /** Carrega uma pasta; só troca de pasta se a listagem der certo. */
   const load = useCallback(
-    async (path: string, select: string[] = []) => {
+    // Sem select, mantém a seleção atual (ex.: F5); itens que sumiram saem sozinhos.
+    async (path: string, select?: string[]) => {
       const seq = ++loadSeq.current
       setLoading(true)
       try {
@@ -103,7 +103,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
         if (seq !== loadSeq.current) return false
         setEntries(list)
         setCwd(path)
-        setSelected(new Set(select))
+        if (select) selectOnly(select)
         return true
       } catch (e) {
         if (seq === loadSeq.current) toast('error', `${path}: ${errMsg(e)}`)
@@ -163,6 +163,16 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       })
   }, [entries, filter, showHidden, sort])
 
+  const visiblePaths = useMemo(() => visible.map((e) => e.path), [visible])
+  const visibleNames = useMemo(() => visible.map((e) => e.name), [visible])
+  const { selected, setSelected, selectOnly, focus, focusIndex, click, moveTo, toggleFocused } = useListSelection(visiblePaths)
+  // Clique no espaço em branco: seleciona a linha sob o cursor (ou limpa, abaixo da última).
+  const marquee = useMarquee(listRef, visiblePaths, selected, setSelected, (path, mods) =>
+    path ? click(path, mods) : !mods.ctrlKey && !mods.shiftKey && setSelected(new Set())
+  )
+  const focusRow = (path: string | null) =>
+    path && listRef.current?.querySelector(`[data-path="${CSS.escape(path)}"]`)?.scrollIntoView({ block: 'nearest' })
+  const typeAhead = useTypeAhead(visibleNames, focusIndex, (i) => focusRow(moveTo(i, { ctrlKey: false, shiftKey: false })))
   const selection = visible.filter((e) => selected.has(e.path))
 
   // ---------- Ações ----------
@@ -375,35 +385,21 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
 
   // ---------- Seleção e eventos ----------
 
-  const clickRow = (e: MouseEvent, entry: FileEntry) => {
-    if (e.shiftKey && anchor) {
-      const a = visible.findIndex((x) => x.path === anchor)
-      const b = visible.findIndex((x) => x.path === entry.path)
-      const [from, to] = a < b ? [a, b] : [b, a]
-      setSelected(new Set(visible.slice(from, to + 1).map((x) => x.path)))
-      return
-    }
-    if (e.ctrlKey) {
-      setSelected((s) => {
-        const next = new Set(s)
-        if (next.has(entry.path)) next.delete(entry.path)
-        else next.add(entry.path)
-        return next
-      })
-    } else {
-      setSelected(new Set([entry.path]))
-    }
-    setAnchor(entry.path)
+  // Clique simples num item que já faz parte de uma seleção múltipla só reduz a seleção ao soltar,
+  // para permitir arrastar todos os selecionados.
+  const keepsSelection = (e: MouseEvent, entry: FileEntry) => !e.ctrlKey && !e.shiftKey && selected.has(entry.path) && selected.size > 1
+  const pressRow = (e: MouseEvent, entry: FileEntry) => {
+    if (e.button === 0 && !keepsSelection(e, entry)) click(entry.path, e)
+  }
+  const releaseRow = (e: MouseEvent, entry: FileEntry) => {
+    if (keepsSelection(e, entry)) click(entry.path, e)
   }
 
   const rowMenu = (e: MouseEvent, entry: FileEntry) => {
     e.preventDefault()
     e.stopPropagation()
     const list = selected.has(entry.path) ? selection : [entry]
-    if (!selected.has(entry.path)) {
-      setSelected(new Set([entry.path]))
-      setAnchor(entry.path)
-    }
+    if (!selected.has(entry.path)) click(entry.path, { ctrlKey: false, shiftKey: false })
     const single = list.length === 1
     const items: MenuEntry[] = []
     if (single) {
@@ -465,14 +461,14 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     })
   }
 
-  const moveSelection = (delta: number, extend: boolean) => {
-    if (visible.length === 0) return
-    const current = visible.findIndex((x) => x.path === (anchor ?? ''))
-    const next = visible[Math.max(0, Math.min(visible.length - 1, current < 0 ? 0 : current + delta))]
-    if (extend && anchor) setSelected((s) => new Set([...s, next.path]))
-    else setSelected(new Set([next.path]))
-    setAnchor(next.path)
-    listRef.current?.querySelector(`[data-path="${CSS.escape(next.path)}"]`)?.scrollIntoView({ block: 'nearest' })
+  const pageSize = () => Math.max(1, Math.floor((listRef.current?.clientHeight ?? ROW_HEIGHT * 10) / ROW_HEIGHT) - 1)
+  const NAV_KEYS: Record<string, (i: number) => number> = {
+    ArrowDown: (i) => i + 1,
+    ArrowUp: (i) => Math.max(0, i - 1),
+    Home: () => 0,
+    End: () => visible.length - 1,
+    PageDown: (i) => i + pageSize(),
+    PageUp: (i) => Math.max(0, i - pageSize())
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -489,13 +485,14 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     if (e.ctrlKey && k.toLowerCase() === 'x') return handled(), toClipboard(selection, 'cut')
     if (e.ctrlKey && k.toLowerCase() === 'v') return handled(), paste(cwd)
     if (e.ctrlKey && k.toLowerCase() === 'a') return handled(), setSelected(new Set(visible.map((x) => x.path)))
-    if (k === 'ArrowDown') return handled(), moveSelection(1, e.shiftKey)
-    if (k === 'ArrowUp') return handled(), moveSelection(-1, e.shiftKey)
+    if (NAV_KEYS[k] && !e.altKey) return handled(), focusRow(moveTo(NAV_KEYS[k](focusIndex), e))
+    if (e.ctrlKey && k === ' ') return handled(), toggleFocused()
     if (k === 'Escape') return setSelected(new Set())
     if (k === 'Enter' && !e.altKey && selection.length === 1) return handled(), open(selection[0])
     if (e.altKey && k === 'Enter' && selection.length > 0) return handled(), setPermsFor(selection)
     if (k === 'F2' && selection.length === 1) return handled(), rename(selection[0])
     if (k === 'Delete' && selection.length > 0) return handled(), remove(selection, e.shiftKey)
+    if (k.length === 1 && k !== ' ' && !e.ctrlKey && !e.altKey && !e.metaKey) return handled(), typeAhead(k)
   }
 
   const onDrop = (e: DragEvent) => {
@@ -665,8 +662,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
             role="listbox"
             aria-multiselectable="true"
             aria-label={`Arquivos em ${cwd}`}
-            className="min-h-0 flex-1 overflow-auto outline-none"
-            onMouseDown={(e) => e.target === e.currentTarget && setSelected(new Set())}
+            className="relative min-h-0 flex-1 overflow-auto outline-none"
+            onMouseDown={(e) => !(e.target as HTMLElement).closest('[data-name-cell]') && marquee.start(e)}
             onContextMenu={backgroundMenu}
           >
             {visible.map((e) => {
@@ -677,14 +674,17 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
                   data-path={e.path}
                   role="option"
                   aria-selected={isSel}
-                  onMouseDown={(ev) => ev.button === 0 && clickRow(ev, e)}
+                  onClick={(ev) => releaseRow(ev, e)}
                   onDoubleClick={() => open(e)}
                   onContextMenu={(ev) => rowMenu(ev, e)}
-                  className={`${COLS} h-7 cursor-default items-center text-[13px] ${isSel ? 'bg-accent/25' : 'hover:bg-hover'} ${isCut(e.path) ? 'opacity-50' : ''}`}
+                  className={`${COLS} h-7 cursor-default items-center text-[13px] ${isSel ? 'bg-accent/25' : 'hover:bg-hover'} ${isCut(e.path) ? 'opacity-50' : ''} ${focus === e.path ? 'outline outline-1 -outline-offset-1 outline-accent/70' : ''}`}
                 >
-                  <div className="flex min-w-0 items-center gap-2 px-2">
-                    <FileIcon entry={e} />
-                    <span className={`truncate ${e.name.startsWith('.') ? 'opacity-70' : ''}`}>{e.name}</span>
+                  <div className="flex min-w-0 px-2">
+                    {/* Só o ícone + nome "pegam" o item; o resto da linha inicia o retângulo de seleção. */}
+                    <div data-name-cell className="flex min-w-0 items-center gap-2 pr-1" onMouseDown={(ev) => pressRow(ev, e)}>
+                      <FileIcon entry={e} />
+                      <span className={`truncate ${e.name.startsWith('.') ? 'opacity-70' : ''}`}>{e.name}</span>
+                    </div>
                   </div>
                   <div className="px-2 text-right text-xs text-muted">{e.isDir ? '' : formatSize(e.size)}</div>
                   <div className="px-2 text-xs text-muted">{formatDate(e.mtime)}</div>
@@ -693,6 +693,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
                 </div>
               )
             })}
+            {marquee.rect && <div className="pointer-events-none absolute border border-accent bg-accent/15" style={marquee.rect} />}
             {!loading && visible.length === 0 && (
               <div className="pointer-events-none py-16 text-center text-muted">
                 {filter ? 'Nenhum item corresponde ao filtro.' : 'Pasta vazia. Arraste arquivos aqui para enviar.'}
