@@ -41,5 +41,26 @@
   },
   "overrides": {
     "dompurify": "^3.4.17"
+  },
+  "build": {
+    "appId": "com.vpshub.app",
+    "productName": "VPS Hub",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "VPS Hub"
+    }
   }
 }
