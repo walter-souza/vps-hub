@@ -44,11 +44,11 @@ export function cleanFields(i: VpsInput): VpsFields {
   return { name, host, port, username, auth, keyPath, initialPath, color, tags }
 }
 
-function encrypt(secret: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
+async function encrypt(secret: string): Promise<string> {
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) {
     throw new AppError('Criptografia do sistema indisponível; não é possível salvar a senha.')
   }
-  return safeStorage.encryptString(secret).toString('base64')
+  return (await safeStorage.encryptStringAsync(secret)).toString('base64')
 }
 
 class ConnectionStore {
@@ -87,17 +87,24 @@ class ConnectionStore {
     return c
   }
 
-  getSecret(id: string): string | undefined {
-    const { secret } = this.get(id)
-    return secret ? safeStorage.decryptString(Buffer.from(secret, 'base64')) : undefined
+  async getSecret(id: string): Promise<string | undefined> {
+    const c = this.get(id)
+    if (!c.secret) return undefined
+    const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(Buffer.from(c.secret, 'base64'))
+    // A chave do sistema foi trocada: regrava o segredo com a chave atual.
+    if (shouldReEncrypt) {
+      c.secret = await encrypt(result)
+      this.persist()
+    }
+    return result
   }
 
-  save(input: VpsInput, id?: string): VpsConnection {
+  async save(input: VpsInput, id?: string): Promise<VpsConnection> {
     const fields = cleanFields(input)
     const existing = id ? this.get(id) : undefined
     let secret = existing && existing.auth === fields.auth ? existing.secret : undefined
     if (!input.rememberSecret) secret = undefined
-    else if (input.secret) secret = encrypt(input.secret)
+    else if (input.secret) secret = await encrypt(input.secret)
 
     const next: StoredConnection = { ...existing, ...fields, id: existing?.id ?? randomUUID(), secret }
     if (existing) this.data.connections = this.data.connections.map((c) => (c.id === next.id ? next : c))

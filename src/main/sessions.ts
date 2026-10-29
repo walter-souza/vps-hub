@@ -194,7 +194,7 @@ export function connectSession(id: string, secretOverride?: string): Promise<Ses
 
   const p = (async () => {
     const c = store.get(id)
-    const client = await openClient(c, secretOverride || store.getSecret(id))
+    const client = await openClient(c, secretOverride || (await store.getSecret(id)))
     try {
       const sftp = await new Promise<SFTPWrapper>((res, rej) =>
         client.sftp((e, s) => (e ? rej(toAppError(e)) : res(s)))
@@ -233,7 +233,7 @@ export function disconnect(id: string): void {
 export async function testConnection(input: VpsInput, id?: string): Promise<TestResult> {
   const fields = cleanFields(input)
   const existing = id ? store.get(id) : undefined
-  const secret = input.secret || (existing && existing.auth === fields.auth ? store.getSecret(existing.id) : undefined)
+  const secret = input.secret || (existing && existing.auth === fields.auth ? await store.getSecret(existing.id) : undefined)
   const client = await openClient(fields, secret)
   try {
     const start = Date.now()
