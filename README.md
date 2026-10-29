@@ -19,6 +19,7 @@ npm run typecheck
 - **Autenticação**: senha ou chave privada (OpenSSH ou .ppk, com passphrase). Senhas e passphrases podem ser lembradas, criptografadas pelo Windows (DPAPI via `safeStorage`); se não estiverem salvas, o app pede na hora de conectar.
 - **Host key**: na primeira conexão o fingerprint é exibido para confirmação; se mudar depois, o app avisa (possível ataque man-in-the-middle).
 - **Explorer**: navegação com histórico, breadcrumb editável (Ctrl+L, aceita `~`), acesso rápido, ordenação, filtro, arquivos ocultos, multisseleção, menu de contexto e atalhos (F2, Del, F5, Enter, Alt+←/→/↑, Ctrl+A, Ctrl+Shift+N).
+- **Copiar, recortar e colar** (Ctrl+C/X/V ou menu): na mesma VPS usa `cp -a`/`mv` no servidor; entre VPS diferentes copia via SFTP preservando permissões e links. Colar na mesma pasta cria "nome - cópia"; itens substituídos vão para a lixeira.
 - **Editor** (Monaco): abas, Ctrl+S, detecção de conflito se o arquivo mudou no servidor, gravação atômica (arquivo temporário + rename), recusa binários, arquivos não UTF-8 e arquivos acima de 5 MB.
 - **Transferências**: upload (botão ou arrastar do Windows, inclusive pastas) e download, com progresso.
 - **Terminal** integrado (xterm.js), aberto na pasta atual.
@@ -34,6 +35,7 @@ src/
 │  ├─ sessions.ts   uma conexão SSH por VPS, verificação de host key
 │  ├─ files.ts      operações SFTP e transferências
 │  ├─ trash.ts      exclusão, lixeira e restauração
+│  ├─ paste.ts      copiar/recortar/colar (mesma VPS e entre VPS)
 │  ├─ sshConfig.ts  leitura do ~/.ssh/config
 │  ├─ terminals.ts  shells interativos
 │  └─ ipc.ts        canais IPC

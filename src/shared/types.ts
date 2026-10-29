@@ -63,6 +63,8 @@ export interface TrashItem {
   size: number
 }
 
+export type PasteMode = 'copy' | 'cut'
+
 export interface FileEntry {
   name: string
   path: string
@@ -85,7 +87,7 @@ export interface TransferEvent {
   id: string
   vpsId: string
   name: string
-  direction: 'up' | 'down'
+  direction: 'up' | 'down' | 'copy'
   transferred: number
   total: number
   status: 'running' | 'done' | 'error'
@@ -127,6 +129,8 @@ export interface VpsApi {
     rename(id: string, from: string, to: string): Promise<void>
     /** Move para a lixeira (retorna os ids na lixeira) ou, se permanent, apaga de vez. */
     remove(id: string, paths: string[], permanent: boolean): Promise<string[]>
+    /** Cola itens (de qualquer VPS conectada) em destDir; replace manda os existentes para a lixeira. Retorna os caminhos finais. */
+    paste(srcId: string, paths: string[], destId: string, destDir: string, mode: PasteMode, replace: boolean): Promise<string[]>
     pickUpload(): Promise<string[]>
     upload(id: string, localPaths: string[], remoteDir: string): Promise<void>
     /** Pergunta a pasta local de destino; retorna null se cancelado. */

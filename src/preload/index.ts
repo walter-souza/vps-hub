@@ -37,6 +37,7 @@ const api: VpsApi = {
     mkdir: (id, path) => invoke('fs:mkdir', id, path),
     rename: (id, from, to) => invoke('fs:rename', id, from, to),
     remove: (id, paths, permanent) => invoke('fs:remove', id, paths, permanent),
+    paste: (srcId, paths, destId, destDir, mode, replace) => invoke('fs:paste', srcId, paths, destId, destDir, mode, replace),
     pickUpload: () => invoke('fs:pickUpload'),
     upload: (id, localPaths, remoteDir) => invoke('fs:upload', id, localPaths, remoteDir),
     download: (id, remotePaths) => invoke('fs:download', id, remotePaths),

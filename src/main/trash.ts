@@ -4,7 +4,7 @@ import { baseName, joinPath, parentPath } from '../shared/paths'
 import type { TrashItem } from '../shared/types'
 import { AppError } from './errors'
 import { call, remotePath, statOrNull } from './files'
-import { exec, getSession, shellQuote, type Session } from './sessions'
+import { exec, getSession, sh, shellQuote, type Session } from './sessions'
 
 // Lixeira por VPS em ~/.vpshub-trash/<id>/, com o item e um arquivo de metadados com o caminho original.
 const TRASH_DIR = '.vpshub-trash'
@@ -16,11 +16,6 @@ const PROTECTED = new Set(
 
 const trashRoot = (s: Session) => joinPath(s.info.home, TRASH_DIR)
 
-async function sh(s: Session, cmd: string, failure: string): Promise<void> {
-  const { code, stderr } = await exec(s.client, cmd)
-  if (code !== 0) throw new AppError(`${failure}: ${stderr.trim() || `código ${code}`}`)
-}
-
 function entryPath(s: Session, trashId: unknown): string {
   if (typeof trashId !== 'string' || !ID_RE.test(trashId)) throw new AppError('Item da lixeira inválido.')
   return joinPath(trashRoot(s), trashId)
@@ -28,13 +23,20 @@ function entryPath(s: Session, trashId: unknown): string {
 
 const isListed = (e: FileEntryWithStats) => e.filename !== '.' && e.filename !== '..'
 
-async function deletePermanently(s: Session, path: string): Promise<void> {
+/** Pastas do sistema, a home e qualquer pasta que a contenha (e portanto a lixeira) nunca saem do lugar. */
+export function assertRemovable(s: Session, paths: string[], action: string): void {
+  const root = trashRoot(s)
+  const blocked = paths.find((t) => PROTECTED.has(t) || t === s.info.home || root.startsWith(`${t}/`))
+  if (blocked) throw new AppError(`Por segurança, "${blocked}" não pode ser ${action} pelo VPS Hub.`)
+}
+
+export async function deletePermanently(s: Session, path: string): Promise<void> {
   const st = await call<Stats>((cb) => s.sftp.lstat(path, cb))
   if (st.isDirectory()) await sh(s, `rm -rf -- ${shellQuote(path)}`, `Falha ao excluir "${baseName(path)}"`)
   else await call((cb) => s.sftp.unlink(path, cb))
 }
 
-async function moveToTrash(s: Session, path: string): Promise<string> {
+export async function moveToTrash(s: Session, path: string): Promise<string> {
   await call<Stats>((cb) => s.sftp.lstat(path, cb)) // falha cedo se o item não existe
   const root = trashRoot(s)
   const trashId = `${Date.now()}-${randomBytes(3).toString('hex')}`
@@ -58,9 +60,7 @@ export async function remove(id: string, paths: string[], permanent: boolean): P
   if (!Array.isArray(paths)) throw new AppError('Seleção inválida.')
   const targets = paths.map(remotePath)
   const root = trashRoot(s)
-  // Inclui qualquer pasta que contenha a home (e portanto a própria lixeira).
-  const blocked = targets.find((t) => PROTECTED.has(t) || t === s.info.home || root.startsWith(`${t}/`))
-  if (blocked) throw new AppError(`Por segurança, "${blocked}" não pode ser excluído pelo VPS Hub.`)
+  assertRemovable(s, targets, 'excluído')
 
   const trashIds: string[] = []
   for (const path of targets) {

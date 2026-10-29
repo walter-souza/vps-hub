@@ -23,6 +23,13 @@ export function baseName(p: string): string {
   return n === '/' ? '/' : n.slice(n.lastIndexOf('/') + 1)
 }
 
+/** Nome para colar uma cópia na mesma pasta, como no Windows: "app - cópia.js", "app - cópia (2).js". */
+export function copyName(name: string, n: number, isDir: boolean): string {
+  const dot = isDir ? -1 : name.lastIndexOf('.')
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, '']
+  return `${stem} - cópia${n > 1 ? ` (${n})` : ''}${ext}`
+}
+
 /** Retorna mensagem de erro, ou null se o nome for válido para um item. */
 export function validateName(name: string): string | null {
   if (!name.trim()) return 'Informe um nome.'

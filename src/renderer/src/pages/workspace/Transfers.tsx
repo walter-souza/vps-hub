@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, CheckCircle2, XCircle } from 'lucide-react'
+import { ArrowDown, ArrowUp, CheckCircle2, Copy, XCircle } from 'lucide-react'
 import { Button } from '../../components/ui'
 import { formatSize } from '../../lib/format'
 import { useApp } from '../../lib/store'
@@ -23,7 +23,13 @@ export function Transfers({ vpsId }: { vpsId: string }) {
           const pct = t.total > 0 ? Math.min(100, (t.transferred / t.total) * 100) : 100
           return (
             <li key={t.id} className="flex items-center gap-3 border-b border-line/60 py-1.5">
-              {t.direction === 'up' ? <ArrowUp size={14} className="text-accent" /> : <ArrowDown size={14} className="text-ok" />}
+              {t.direction === 'up' ? (
+                <ArrowUp size={14} className="text-accent" />
+              ) : t.direction === 'down' ? (
+                <ArrowDown size={14} className="text-ok" />
+              ) : (
+                <Copy size={14} className="text-warn" />
+              )}
               <span className="w-64 truncate" title={t.name}>
                 {t.name}
               </span>

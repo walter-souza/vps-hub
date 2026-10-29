@@ -1,11 +1,18 @@
 import { create } from 'zustand'
-import type { SessionInfo, TransferEvent, VpsConnection } from '../../../shared/types'
+import type { PasteMode, SessionInfo, TransferEvent, VpsConnection } from '../../../shared/types'
 
 export interface Toast {
   id: number
   kind: 'info' | 'success' | 'error'
   text: string
   action?: { label: string; run: () => void }
+}
+
+/** Itens copiados/recortados; compartilhada entre as VPS para permitir colar em outra. */
+export interface Clipboard {
+  vpsId: string
+  paths: string[]
+  mode: PasteMode
 }
 
 export interface SessionState {
@@ -23,6 +30,7 @@ interface AppState {
   dirty: Record<string, number>
   transfers: TransferEvent[]
   toasts: Toast[]
+  clipboard: Clipboard | null
 
   setConnections(list: VpsConnection[]): void
   upsertConnection(c: VpsConnection): void
@@ -35,6 +43,7 @@ interface AppState {
   setDirty(id: string, count: number): void
   upsertTransfer(e: TransferEvent): void
   clearTransfers(vpsId: string): void
+  setClipboard(c: Clipboard | null): void
   toast(kind: Toast['kind'], text: string, action?: Toast['action']): void
   dismissToast(id: number): void
 }
@@ -49,6 +58,7 @@ export const useApp = create<AppState>((set, get) => ({
   dirty: {},
   transfers: [],
   toasts: [],
+  clipboard: null,
 
   setConnections: (connections) => set({ connections }),
   upsertConnection: (c) =>
@@ -66,7 +76,8 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => {
       const { [id]: _removed, ...sessions } = s.sessions
       const { [id]: _dirty, ...dirty } = s.dirty
-      return { sessions, dirty, ...(s.activeId === id ? { activeId: null, view: 'hub' as const } : {}) }
+      const clipboard = s.clipboard?.vpsId === id ? null : s.clipboard
+      return { sessions, dirty, clipboard, ...(s.activeId === id ? { activeId: null, view: 'hub' as const } : {}) }
     }),
 
   open: (id) => set({ activeId: id, view: 'workspace' }),
@@ -83,6 +94,7 @@ export const useApp = create<AppState>((set, get) => ({
   clearTransfers: (vpsId) =>
     set((s) => ({ transfers: s.transfers.filter((t) => t.vpsId !== vpsId || t.status === 'running') })),
 
+  setClipboard: (clipboard) => set({ clipboard }),
   toast: (kind, text, action) => {
     const id = ++toastSeq
     set((s) => ({ toasts: [...s.toasts, { id, kind, text, action }] }))

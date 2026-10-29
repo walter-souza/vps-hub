@@ -150,7 +150,7 @@ export async function rename(id: string, from: string, to: string): Promise<void
   await call((cb) => sftp.rename(src, dest, cb))
 }
 
-async function track(
+export async function track(
   vpsId: string,
   name: string,
   direction: TransferEvent['direction'],

@@ -7,6 +7,7 @@ import * as files from './files'
 import { connectSession, disconnect, probe, testConnection } from './sessions'
 import { readSshConfig } from './sshConfig'
 import { store } from './store'
+import { paste } from './paste'
 import * as trash from './trash'
 import { closeTerminal, openTerminal, resizeTerminal, writeTerminal } from './terminals'
 
@@ -52,6 +53,7 @@ export function registerIpc(): void {
   handle('fs:mkdir', files.makeDir)
   handle('fs:rename', files.rename)
   handle('fs:remove', trash.remove)
+  handle('fs:paste', paste)
   handle('fs:pickUpload', files.pickUpload)
   handle('fs:upload', files.upload)
   handle('fs:download', files.download)

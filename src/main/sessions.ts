@@ -177,6 +177,12 @@ export function exec(client: Client, cmd: string): Promise<{ stdout: string; std
   })
 }
 
+/** Roda um comando e lança AppError com o stderr se ele falhar. */
+export async function sh(s: Session, cmd: string, failure: string): Promise<void> {
+  const { code, stderr } = await exec(s.client, cmd)
+  if (code !== 0) throw new AppError(`${failure}: ${stderr.trim() || `código ${code}`}`)
+}
+
 async function sysInfo(client: Client): Promise<{ uid: number; user: string; os: string }> {
   const { stdout } = await exec(
     client,

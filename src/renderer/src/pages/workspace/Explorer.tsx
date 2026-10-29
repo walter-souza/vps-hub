@@ -1,5 +1,8 @@
 import {
   ArrowLeft,
+  ClipboardPaste,
+  Copy,
+  Scissors,
   ArrowRight,
   ArrowUp,
   ChevronDown,
@@ -23,14 +26,14 @@ import {
   Upload
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
-import { joinPath, normalizePath, parentPath, validateName } from '../../../../shared/paths'
-import type { FileEntry, SessionInfo, VpsConnection } from '../../../../shared/types'
+import { baseName, joinPath, normalizePath, parentPath, validateName } from '../../../../shared/paths'
+import type { FileEntry, PasteMode, SessionInfo, VpsConnection } from '../../../../shared/types'
 import { ContextMenu, type MenuEntry, type MenuState } from '../../components/ContextMenu'
 import { FileIcon } from '../../components/FileIcon'
 import { api, errMsg } from '../../lib/api'
 import { confirm, prompt } from '../../lib/dialogs'
 import { formatDate, formatSize } from '../../lib/format'
-import { toast } from '../../lib/store'
+import { toast, useApp } from '../../lib/store'
 import { TrashView } from './TrashView'
 
 type SortKey = 'name' | 'size' | 'mtime'
@@ -267,6 +270,49 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       if (dir) toast('success', 'Download concluído.', { label: 'Abrir pasta', run: () => api.fs.revealLocal(dir) })
     })
 
+  const clipboard = useApp((s) => s.clipboard)
+  const setClipboard = useApp((s) => s.setClipboard)
+  const isCut = (path: string) => clipboard?.mode === 'cut' && clipboard.vpsId === id && clipboard.paths.includes(path)
+
+  const toClipboard = (list: FileEntry[], mode: PasteMode) =>
+    list.length > 0 && setClipboard({ vpsId: id, paths: list.map((e) => e.path), mode })
+
+  const paste = async (destDir: string) => {
+    const clip = useApp.getState().clipboard
+    if (!clip) return
+    const sameDir = clip.vpsId === id && clip.paths.every((p) => parentPath(p) === destDir)
+    if (sameDir && clip.mode === 'cut') return
+    let replace = false
+    if (!sameDir) {
+      // Colar na mesma pasta gera "nome - cópia"; em outra pasta, nomes repetidos precisam de confirmação.
+      const existing =
+        destDir === cwdRef.current ? entries : await api.fs.list(id, destDir).catch(() => [] as FileEntry[])
+      const names = new Set(existing.map((e) => e.name))
+      const clashes = clip.paths.map(baseName).filter((n) => names.has(n))
+      if (clashes.length > 0) {
+        const ok = await confirm({
+          title: 'Substituir itens existentes?',
+          message: `Estes itens já existem em ${destDir}. Os atuais serão movidos para a lixeira.`,
+          detail: clashes,
+          confirmLabel: 'Substituir',
+          danger: true
+        })
+        if (!ok) return
+        replace = true
+      }
+    }
+    setLoading(true)
+    let pasted: string[] = []
+    await run(async () => {
+      try {
+        pasted = await api.fs.paste(clip.vpsId, clip.paths, id, destDir, clip.mode, replace)
+        if (clip.mode === 'cut') setClipboard(null)
+      } finally {
+        await refresh(destDir === cwdRef.current ? pasted : [])
+      }
+    })
+  }
+
   const copyPath = (path: string) => navigator.clipboard.writeText(path).then(() => toast('info', 'Caminho copiado.'))
 
   // ---------- Seleção e eventos ----------
@@ -309,7 +355,14 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
           : { label: 'Editar', icon: FileText, shortcut: 'Enter', onClick: () => open(entry) }
       )
     }
-    items.push({ label: list.length > 1 ? `Baixar ${list.length} itens` : 'Baixar', icon: Download, onClick: () => download(list) }, 'sep')
+    items.push(
+      { label: list.length > 1 ? `Baixar ${list.length} itens` : 'Baixar', icon: Download, onClick: () => download(list) },
+      'sep',
+      { label: 'Recortar', icon: Scissors, shortcut: 'Ctrl+X', onClick: () => toClipboard(list, 'cut') },
+      { label: 'Copiar', icon: Copy, shortcut: 'Ctrl+C', onClick: () => toClipboard(list, 'copy') }
+    )
+    if (single && entry.isDir && clipboard) items.push({ label: 'Colar nesta pasta', icon: ClipboardPaste, onClick: () => paste(entry.path) })
+    items.push('sep')
     if (single) {
       items.push(
         { label: 'Renomear', icon: Pencil, shortcut: 'F2', onClick: () => rename(entry) },
@@ -332,6 +385,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       items: [
         { label: 'Novo arquivo', icon: FilePlus, onClick: () => newItem('file') },
         { label: 'Nova pasta', icon: FolderPlus, shortcut: 'Ctrl+Shift+N', onClick: () => newItem('dir') },
+        'sep',
+        { label: 'Colar', icon: ClipboardPaste, shortcut: 'Ctrl+V', disabled: !clipboard, onClick: () => paste(cwd) },
         'sep',
         { label: 'Enviar arquivos…', icon: Upload, onClick: async () => upload(await api.fs.pickUpload()) },
         { label: 'Atualizar', icon: RefreshCw, shortcut: 'F5', onClick: () => refresh() },
@@ -363,6 +418,9 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     if (e.altKey && k === 'ArrowLeft') return handled(), back()
     if (e.altKey && k === 'ArrowRight') return handled(), forward()
     if ((e.altKey && k === 'ArrowUp') || k === 'Backspace') return handled(), up()
+    if (e.ctrlKey && k.toLowerCase() === 'c') return handled(), toClipboard(selection, 'copy')
+    if (e.ctrlKey && k.toLowerCase() === 'x') return handled(), toClipboard(selection, 'cut')
+    if (e.ctrlKey && k.toLowerCase() === 'v') return handled(), paste(cwd)
     if (e.ctrlKey && k.toLowerCase() === 'a') return handled(), setSelected(new Set(visible.map((x) => x.path)))
     if (k === 'ArrowDown') return handled(), moveSelection(1, e.shiftKey)
     if (k === 'ArrowUp') return handled(), moveSelection(-1, e.shiftKey)
@@ -538,7 +596,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
                   onMouseDown={(ev) => ev.button === 0 && clickRow(ev, e)}
                   onDoubleClick={() => open(e)}
                   onContextMenu={(ev) => rowMenu(ev, e)}
-                  className={`${COLS} h-7 cursor-default items-center text-[13px] ${isSel ? 'bg-accent/25' : 'hover:bg-hover'}`}
+                  className={`${COLS} h-7 cursor-default items-center text-[13px] ${isSel ? 'bg-accent/25' : 'hover:bg-hover'} ${isCut(e.path) ? 'opacity-50' : ''}`}
                 >
                   <div className="flex min-w-0 items-center gap-2 px-2">
                     <FileIcon entry={e} />
@@ -562,6 +620,12 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
             {selection.length > 0 && (
               <span>
                 {selection.length} selecionado(s){selectedSize > 0 && ` · ${formatSize(selectedSize)}`}
+              </span>
+            )}
+            {clipboard && (
+              <span className="ml-auto">
+                {clipboard.paths.length} item(ns) {clipboard.mode === 'cut' ? 'recortado(s)' : 'copiado(s)'}
+                {clipboard.vpsId !== id && ' de outra VPS'} · Ctrl+V para colar
               </span>
             )}
           </div>

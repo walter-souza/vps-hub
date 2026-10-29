@@ -39,9 +39,10 @@ Three processes, standard electron-vite layout (`src/main`, `src/preload`, `src/
 
 **Main process modules.**
 - `store.ts`: connections + encrypted secrets + known host fingerprints in `userData/vps-hub.json` (atomic write; a corrupt file is renamed aside, never overwritten). `cleanFields` validates all connection input.
-- `sessions.ts`: one live `ssh2` client + SFTP channel per VPS id. Host keys are verified with a native dialog (first use / changed key). Auth uses an `authHandler` that first tries `none` to learn the server's accepted methods so it can explain failures. `exec()` and `shellQuote()` are the only way to run shell commands; always quote paths.
+- `sessions.ts`: one live `ssh2` client + SFTP channel per VPS id. Host keys are verified with a native dialog (first use / changed key). Auth uses an `authHandler` that first tries `none` to learn the server's accepted methods so it can explain failures. `exec()`/`sh()` (throws with stderr on failure) and `shellQuote()` are the only way to run shell commands; always quote paths.
 - `files.ts`: SFTP operations and transfers. `remotePath()` validates/normalizes every path coming from the renderer. Saves are atomic (temp file + `posix-rename`) only when the file is owned by the session uid, and check `mtime` for conflicts. The editor refuses binaries, non-UTF-8 and >5 MB files.
 - `trash.ts`: owns deletion. `fs:remove` moves items to `~/.vpshub-trash/<id>/` (with a metadata JSON holding the original path) unless `permanent`; protected system dirs, the home dir and its ancestors can never be deleted. Restore never overwrites.
+- `paste.ts`: copy/cut/paste. Same VPS runs `cp -a`/`mv` on the server; across VPS it streams SFTP → SFTP through the app (recreating symlinks, keeping modes) and deletes the source only after a full copy. Replaced items go to the trash; cut uses the same `assertRemovable` guard as delete. The renderer's clipboard lives in the Zustand store so it can be pasted into another VPS's workspace.
 - `terminals.ts`: interactive shells via `exec` with a PTY (`cd <dir>; exec $SHELL -l`); cleaned up through `onSessionEnd`.
 - `sshConfig.ts`: parses `~/.ssh/config` with OpenSSH semantics (first value wins, `Host *` defaults, negated patterns; `Match` blocks ignored).
 
