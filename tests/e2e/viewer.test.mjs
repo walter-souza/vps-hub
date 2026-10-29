@@ -1,7 +1,7 @@
 // Visualizador de imagens: abrir, zoom, SVG sem executar script, limite de tamanho.
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { dockerSh, fileList, launchApp, saveConnection, state } from './helpers.mjs'
+import { dialogBox, dockerSh, fileList, launchApp, saveConnection, state } from './helpers.mjs'
 
 const S = state()
 const A = S.a
@@ -81,13 +81,13 @@ test('Markdown abre com pré-visualização ao lado, atualizada ao digitar e sem
   await win.keyboard.press('Control+Home')
   await win.keyboard.type('## Novo\n')
   await preview.getByRole('heading', { name: 'Novo' }).waitFor()
-  await win.keyboard.press('Control+Z') // desfaz: arquivo sem alterações não bloqueia o fechamento do app
-  await preview.getByRole('heading', { name: 'Novo' }).waitFor({ state: 'detached' })
-  await win.locator('text=Não salvo').waitFor({ state: 'detached' })
-
   await preview.getByRole('link', { name: 'site' }).click()
   assert.ok(win.url().startsWith('file:'), 'clicar em link não navega a janela')
 
   await win.getByRole('button', { name: 'Pré-visualizar' }).click()
   await preview.waitFor({ state: 'detached' })
+  // descarta a edição: arquivo alterado e não salvo bloquearia o fechamento do app no fim da suíte
+  await win.getByRole('button', { name: 'Recarregar' }).click()
+  await dialogBox(win, 'Descartar alterações?').getByRole('button', { name: 'Recarregar' }).click()
+  await win.getByText('Não salvo').waitFor({ state: 'detached' })
 })
