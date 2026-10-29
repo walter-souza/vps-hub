@@ -113,3 +113,7 @@ Detalhes de arquitetura e convenções para quem for mexer no código estão em 
 ## Contribuindo
 
 Mensagens de commit em inglês, no padrão [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `test:`…). Antes de abrir um PR, rode `npm run typecheck` e `npm run test:e2e`, e adicione cenários de teste para funcionalidades novas.
+
+## Licença
+
+[MIT](LICENSE)

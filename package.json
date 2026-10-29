@@ -2,6 +2,7 @@
   "name": "vps-hub",
   "version": "1.0.0",
   "description": "Hub de VPS com explorador de arquivos via SSH/SFTP",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/walter-souza/vps-hub.git"
