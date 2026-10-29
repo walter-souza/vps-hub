@@ -54,6 +54,12 @@ interface Props {
   onOpenTerminal: (cwd: string) => void
 }
 
+/** Tipo próprio nos dados do arraste, para distinguir itens do app de arquivos vindos do Windows. */
+const DRAG_MIME = 'application/x-vpshub-items'
+type DropTarget = { dir: string } | 'trash'
+type DropAction = { op: 'move' | 'copy' | 'upload' | 'trash'; dir: string; text: string }
+type ItemRef = Pick<FileEntry, 'path' | 'name' | 'isDir'>
+
 const collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' })
 const COLS = 'grid grid-cols-[minmax(220px,1fr)_90px_130px_96px_90px]'
 
@@ -82,7 +88,6 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   const [filter, setFilter] = useState('')
   const [editingPath, setEditingPath] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
-  const [dropActive, setDropActive] = useState(false)
   // O painel central mostra a pasta atual, a lixeira ou os resultados de uma busca.
   const [view, setView] = useState<'files' | 'trash' | 'search'>('files')
   const [search, setSearch] = useState({ term: '', key: 0 })
@@ -237,11 +242,12 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   }
 
   /** Del manda para a lixeira; Shift+Del (ou itens já dentro da lixeira) apaga de vez. */
-  const remove = async (list: FileEntry[], permanent = false) => {
+  const remove = async (list: ItemRef[], permanent = false, ask = true) => {
     if (list.length === 0) return
     const hard = permanent || isTrashPath(cwdRef.current)
     const what = list.length === 1 ? `"${list[0].name}"` : `${list.length} itens`
-    const ok = await confirm(
+    // Mover para a lixeira sem perguntar só quando pedido (arrastar); apagar de vez sempre pergunta.
+    const ok = (!hard && !ask) || await confirm(
       hard
         ? {
             title: `Excluir ${what} permanentemente?`,
@@ -277,10 +283,9 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     })
   }
 
-  const upload = async (localPaths: string[]) => {
+  const upload = async (localPaths: string[], dir = cwdRef.current) => {
     if (localPaths.length === 0) return
-    const dir = cwdRef.current
-    const existing = new Set(entries.map((e) => e.name))
+    const existing = new Set((dir === cwdRef.current ? entries : await listOrEmpty(dir)).map((e) => e.name))
     const clashes = localPaths.map((p) => p.split(/[\\/]/).pop() ?? p).filter((n) => existing.has(n))
     if (
       clashes.length > 0 &&
@@ -298,7 +303,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
         await api.fs.upload(id, localPaths, dir)
         toast('success', `Envio para ${dir} concluído.`)
       } finally {
-        if (cwdRef.current === dir) await refresh(localPaths.map((p) => joinPath(dir, p.split(/[\\/]/).pop() ?? p)))
+        await refresh(cwdRef.current === dir ? localPaths.map((p) => joinPath(dir, p.split(/[\\/]/).pop() ?? p)) : undefined)
       }
     })
   }
@@ -319,18 +324,21 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   const toClipboard = (list: FileEntry[], mode: PasteMode) =>
     list.length > 0 && setClipboard({ vpsId: id, paths: list.map((e) => e.path), mode })
 
-  const paste = async (destDir: string) => {
-    const clip = useApp.getState().clipboard
-    if (!clip) return
-    const sameDir = clip.vpsId === id && clip.paths.every((p) => parentPath(p) === destDir)
-    if (sameDir && clip.mode === 'cut') return
+  const listOrEmpty = (dir: string) => api.fs.list(id, dir).catch(() => [] as FileEntry[])
+
+  /**
+   * Copia ou move itens (de qualquer VPS conectada) para destDir. Na mesma pasta, copiar cria
+   * "nome - cópia" e mover não faz nada; em outra pasta, nomes repetidos pedem confirmação e os itens
+   * atuais vão para a lixeira. Retorna os caminhos finais, ou null se nada foi feito.
+   */
+  const transfer = async (srcId: string, paths: string[], destDir: string, mode: PasteMode): Promise<string[] | null> => {
+    const sameDir = srcId === id && paths.every((p) => parentPath(p) === destDir)
+    if (sameDir && mode === 'cut') return null
     let replace = false
     if (!sameDir) {
-      // Colar na mesma pasta gera "nome - cópia"; em outra pasta, nomes repetidos precisam de confirmação.
-      const existing =
-        destDir === cwdRef.current ? entries : await api.fs.list(id, destDir).catch(() => [] as FileEntry[])
+      const existing = destDir === cwdRef.current ? entries : await listOrEmpty(destDir)
       const names = new Set(existing.map((e) => e.name))
-      const clashes = clip.paths.map(baseName).filter((n) => names.has(n))
+      const clashes = paths.map(baseName).filter((n) => names.has(n))
       if (clashes.length > 0) {
         const ok = await confirm({
           title: 'Substituir itens existentes?',
@@ -339,20 +347,27 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
           confirmLabel: 'Substituir',
           danger: true
         })
-        if (!ok) return
+        if (!ok) return null
         replace = true
       }
     }
     setLoading(true)
-    let pasted: string[] = []
-    await run(async () => {
-      try {
-        pasted = await api.fs.paste(clip.vpsId, clip.paths, id, destDir, clip.mode, replace)
-        if (clip.mode === 'cut') setClipboard(null)
-      } finally {
-        await refresh(destDir === cwdRef.current ? pasted : [])
-      }
-    })
+    let done: string[] | null = null
+    try {
+      done = await api.fs.paste(srcId, paths, id, destDir, mode, replace)
+    } catch (e) {
+      toast('error', errMsg(e))
+    } finally {
+      await refresh(destDir === cwdRef.current && done ? done : undefined)
+    }
+    return done
+  }
+
+  const paste = async (destDir: string) => {
+    const clip = useApp.getState().clipboard
+    if (!clip) return
+    const done = await transfer(clip.vpsId, clip.paths, destDir, clip.mode)
+    if (done && clip.mode === 'cut') setClipboard(null)
   }
 
   /** Extrai um arquivo; em "aqui", conflitos pedem confirmação e os itens atuais vão para a lixeira. */
@@ -495,11 +510,136 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     if (k.length === 1 && k !== ' ' && !e.ctrlKey && !e.altKey && !e.metaKey) return handled(), typeAhead(k)
   }
 
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault()
-    setDropActive(false)
-    const paths = [...e.dataTransfer.files].map((f) => api.fs.pathForFile(f)).filter(Boolean)
-    upload(paths)
+  // ---------- Arrastar e soltar ----------
+  // Itens arrastados dentro do app ficam num ref: durante o arraste o navegador não deixa ler os dados.
+  const dragPaths = useRef<string[] | null>(null)
+  const [dragging, setDragging] = useState<Set<string>>(new Set())
+  const [dropHint, setDropHint] = useState<{ key: string; text: string; x: number; y: number } | null>(null)
+  const spring = useRef<{ key: string; timer: ReturnType<typeof setTimeout> } | null>(null)
+
+  const disarmSpring = () => {
+    if (spring.current) clearTimeout(spring.current.timer)
+    spring.current = null
+  }
+  const endDrag = useCallback(() => {
+    dragPaths.current = null
+    setDragging(new Set())
+    setDropHint(null)
+    disarmSpring()
+  }, [])
+  useEffect(() => {
+    // Se a linha de origem sumir (pasta aberta durante o arraste), o dragend não chega até aqui;
+    // o primeiro movimento de mouse depois do arraste encerra o estado.
+    const onMove = () => dragPaths.current && endDrag()
+    window.addEventListener('dragend', endDrag)
+    window.addEventListener('mousemove', onMove)
+    return () => {
+      window.removeEventListener('dragend', endDrag)
+      window.removeEventListener('mousemove', onMove)
+    }
+  }, [endDrag])
+
+  const startItemDrag = (e: DragEvent, entry: FileEntry) => {
+    const list = selected.has(entry.path) ? selection : [entry]
+    if (!selected.has(entry.path)) click(entry.path, { ctrlKey: false, shiftKey: false })
+    const paths = list.map((x) => x.path)
+    dragPaths.current = paths
+    setDragging(new Set(paths))
+    e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ vpsId: id, paths }))
+    e.dataTransfer.effectAllowed = 'copyMove'
+    const ghost = document.createElement('div')
+    ghost.textContent = list.length === 1 ? list[0].name : `${list.length} itens`
+    ghost.className = 'fixed -top-20 left-0 rounded-md bg-accent px-2 py-1 text-xs font-medium text-white'
+    document.body.appendChild(ghost)
+    e.dataTransfer.setDragImage(ghost, -12, -8)
+    setTimeout(() => ghost.remove())
+  }
+
+  const dirLabel = (dir: string) => (dir === '/' ? '/' : baseName(dir))
+  /** O que acontece ao soltar sobre o alvo, ou null se não pode soltar ali. */
+  const resolveDrop = (e: DragEvent, target: DropTarget): DropAction | null => {
+    const paths = dragPaths.current
+    if (!paths) {
+      if (target === 'trash' || !e.dataTransfer.types.includes('Files')) return null
+      return { op: 'upload', dir: target.dir, text: `Enviar para ${dirLabel(target.dir)}` }
+    }
+    if (target === 'trash') return isTrashPath(cwdRef.current) ? null : { op: 'trash', dir: '', text: 'Mover para a Lixeira' }
+    const dir = target.dir
+    if (paths.some((p) => dir === p || dir.startsWith(`${p}/`))) return null // pasta dentro dela mesma
+    const copy = e.ctrlKey
+    if (!copy && paths.every((p) => parentPath(p) === dir)) return null // já está lá
+    return { op: copy ? 'copy' : 'move', dir, text: `${copy ? 'Copiar' : 'Mover'} para ${dirLabel(dir)}` }
+  }
+
+  const performDrop = async (action: DropAction, paths: string[], files: string[]) => {
+    if (action.op === 'upload') return upload(files, action.dir)
+    if (action.op === 'trash') {
+      const items = paths.map((p) => entries.find((x) => x.path === p) ?? { path: p, name: baseName(p), isDir: false })
+      return remove(items, false, false)
+    }
+    const move = action.op === 'move'
+    const from = parentPath(paths[0])
+    const done = await transfer(id, paths, action.dir, move ? 'cut' : 'copy')
+    if (!done) return
+    toast('success', `${done.length} item(ns) ${move ? 'movido(s)' : 'copiado(s)'} para ${dirLabel(action.dir)}.`, {
+      label: 'Desfazer',
+      run: () =>
+        run(async () => {
+          // Desfazer mover = mover de volta; desfazer copiar = mandar as cópias para a lixeira.
+          if (move) await api.fs.paste(id, done, id, from, 'cut', false)
+          else await api.fs.remove(id, done, false)
+          await refresh(move && from === cwdRef.current ? paths : undefined)
+        })
+    })
+  }
+
+  /** Props de um alvo de soltar. springOpen = abrir a pasta se o cursor ficar parado sobre ela. */
+  const dropProps = (target: DropTarget, springOpen?: string) => {
+    const key = target === 'trash' ? 'trash' : target.dir
+    const over = (e: DragEvent) => {
+      e.stopPropagation() // o alvo mais interno decide (pasta da linha > pasta atual)
+      const action = resolveDrop(e, target)
+      if (!action) {
+        e.dataTransfer.dropEffect = 'none'
+        setDropHint(null)
+        return disarmSpring()
+      }
+      e.preventDefault()
+      e.dataTransfer.dropEffect = action.op === 'copy' || action.op === 'upload' ? 'copy' : 'move'
+      setDropHint({ key, text: action.text, x: e.clientX, y: e.clientY })
+      if (springOpen && spring.current?.key !== key) {
+        disarmSpring()
+        spring.current = { key, timer: setTimeout(() => ((spring.current = null), navigate(springOpen)), 900) }
+      }
+    }
+    return {
+      onDragEnter: over,
+      onDragOver: over,
+      onDragLeave: (e: DragEvent) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+        setDropHint((h) => (h?.key === key ? null : h))
+        if (spring.current?.key === key) disarmSpring()
+      },
+      onDrop: (e: DragEvent) => {
+        e.stopPropagation()
+        const action = resolveDrop(e, target)
+        const paths = dragPaths.current ?? []
+        endDrag()
+        if (!action) return
+        e.preventDefault()
+        const files = action.op === 'upload' ? [...e.dataTransfer.files].map((f) => api.fs.pathForFile(f)).filter(Boolean) : []
+        performDrop(action, paths, files)
+      }
+    }
+  }
+
+  /** Rola a lista ao arrastar perto das bordas. */
+  const autoScrollOnDrag = (e: DragEvent) => {
+    const list = listRef.current
+    if (!list) return
+    const box = list.getBoundingClientRect()
+    if (e.clientY < box.top + 30) list.scrollTop -= 14
+    else if (e.clientY > box.bottom - 30) list.scrollTop += 14
   }
 
   // ---------- Render ----------
@@ -564,11 +704,16 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
               onClick={(e) => e.target === e.currentTarget && setEditingPath(cwd)}
               title="Clique para digitar um caminho (Ctrl+L)"
             >
-              <Crumb label="/" onClick={() => navigate('/')} />
+              <Crumb label="/" onClick={() => navigate('/')} active={dropHint?.key === '/'} drop={dropProps({ dir: '/' })} />
               {segments.map((seg, i) => (
                 <span key={i} className="flex min-w-0 items-center">
                   {i > 0 && <ChevronRight size={12} className="shrink-0 text-muted" />}
-                  <Crumb label={seg} onClick={() => navigate('/' + segments.slice(0, i + 1).join('/'))} />
+                  <Crumb
+                    label={seg}
+                    onClick={() => navigate('/' + segments.slice(0, i + 1).join('/'))}
+                    active={dropHint?.key === '/' + segments.slice(0, i + 1).join('/')}
+                    drop={dropProps({ dir: '/' + segments.slice(0, i + 1).join('/') })}
+                  />
                 </span>
               ))}
               <div className="h-full min-w-8 flex-1" onClick={() => setEditingPath(cwd)} />
@@ -616,8 +761,9 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
           <div className="mx-3 my-2 h-px bg-line" />
           <button
             onClick={() => setView('trash')}
+            {...dropProps('trash')}
             title={trashRoot}
-            className={`flex h-7 w-full items-center gap-2 px-3 text-left ${view === 'trash' ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
+            className={`flex h-7 w-full items-center gap-2 px-3 text-left ${dropHint?.key === 'trash' ? 'bg-accent/40 text-fg ring-1 ring-accent' : view === 'trash' ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
           >
             <Trash2 size={14} className="shrink-0" />
             <span className="truncate">Lixeira</span>
@@ -639,15 +785,8 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
 
         {/* Lista de arquivos */}
         <div
-          className={`relative flex min-w-0 flex-1 flex-col ${dropActive ? 'ring-2 ring-accent ring-inset' : ''} ${view !== 'files' ? 'hidden' : ''}`}
-          onDragOver={(e) => {
-            if (!e.dataTransfer.types.includes('Files')) return
-            e.preventDefault()
-            e.dataTransfer.dropEffect = 'copy'
-            setDropActive(true)
-          }}
-          onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDropActive(false)}
-          onDrop={onDrop}
+          className={`relative flex min-w-0 flex-1 flex-col ${dropHint?.key === cwd ? 'ring-2 ring-accent ring-inset' : ''} ${view !== 'files' ? 'hidden' : ''}`}
+          {...dropProps({ dir: cwd })}
         >
           <div className={`${COLS} h-7 shrink-0 items-center border-b border-line text-[11px] font-medium text-muted`}>
             {header('name', 'Nome')}
@@ -665,6 +804,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
             className="relative min-h-0 flex-1 overflow-auto outline-none"
             onMouseDown={(e) => !(e.target as HTMLElement).closest('[data-name-cell]') && marquee.start(e)}
             onContextMenu={backgroundMenu}
+            onDragOverCapture={autoScrollOnDrag}
           >
             {visible.map((e) => {
               const isSel = selected.has(e.path)
@@ -675,13 +815,20 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
                   role="option"
                   aria-selected={isSel}
                   onClick={(ev) => releaseRow(ev, e)}
+                  {...(e.isDir ? dropProps({ dir: e.path }, e.path) : {})}
                   onDoubleClick={() => open(e)}
                   onContextMenu={(ev) => rowMenu(ev, e)}
-                  className={`${COLS} h-7 cursor-default items-center text-[13px] ${isSel ? 'bg-accent/25' : 'hover:bg-hover'} ${isCut(e.path) ? 'opacity-50' : ''} ${focus === e.path ? 'outline outline-1 -outline-offset-1 outline-accent/70' : ''}`}
+                  className={`${COLS} h-7 cursor-default items-center text-[13px] ${isSel ? 'bg-accent/25' : 'hover:bg-hover'} ${isCut(e.path) || dragging.has(e.path) ? 'opacity-50' : ''} ${dropHint?.key === e.path ? 'bg-accent/40 ring-1 ring-accent ring-inset' : ''} ${focus === e.path ? 'outline outline-1 -outline-offset-1 outline-accent/70' : ''}`}
                 >
                   <div className="flex min-w-0 px-2">
                     {/* Só o ícone + nome "pegam" o item; o resto da linha inicia o retângulo de seleção. */}
-                    <div data-name-cell className="flex min-w-0 items-center gap-2 pr-1" onMouseDown={(ev) => pressRow(ev, e)}>
+                    <div
+                      data-name-cell
+                      draggable
+                      className="flex min-w-0 items-center gap-2 pr-1"
+                      onMouseDown={(ev) => pressRow(ev, e)}
+                      onDragStart={(ev) => startItemDrag(ev, e)}
+                    >
                       <FileIcon entry={e} />
                       <span className={`truncate ${e.name.startsWith('.') ? 'opacity-70' : ''}`}>{e.name}</span>
                     </div>
@@ -718,6 +865,15 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       </div>
 
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
+      {dropHint && (
+        <div
+          role="status"
+          className="pointer-events-none fixed z-[70] rounded-md border border-line bg-panel-2 px-2 py-1 text-xs shadow-lg"
+          style={{ left: dropHint.x + 16, top: dropHint.y + 18 }}
+        >
+          → {dropHint.text}
+        </div>
+      )}
       {compressFor && (
         <CompressDialog
           vpsId={id}
@@ -750,9 +906,9 @@ function NavButton({ label, onClick, disabled, icon: Icon, spin }: { label: stri
   )
 }
 
-function Crumb({ label, onClick }: { label: string; onClick: () => void }) {
+function Crumb({ label, onClick, active, drop }: { label: string; onClick: () => void; active: boolean; drop: object }) {
   return (
-    <button onClick={onClick} className="shrink truncate rounded px-1.5 py-0.5 font-mono text-xs hover:bg-hover">
+    <button onClick={onClick} {...drop} className={`shrink truncate rounded px-1.5 py-0.5 font-mono text-xs hover:bg-hover ${active ? 'bg-accent/40 ring-1 ring-accent' : ''}`}>
       {label}
     </button>
   )
