@@ -1,9 +1,10 @@
-import { Box, Cog, Gauge, type LucideIcon } from 'lucide-react'
+import { Box, Cog, Gauge, Network, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { LogSource, ServicesAvailability } from '../../../../shared/types'
 import { api } from '../../lib/api'
 import { Dashboard } from './Dashboard'
 import { DockerView, SystemdView } from './ServicePanels'
+import { TunnelsView } from './TunnelsView'
 
 interface Props {
   vpsId: string
@@ -22,6 +23,7 @@ interface Section {
 const OVERVIEW: Section = { id: 'overview', label: 'Visão geral', icon: Gauge }
 const SYSTEMD: Section = { id: 'systemd', label: 'Serviços', icon: Cog }
 const DOCKER: Section = { id: 'docker', label: 'Docker', icon: Box }
+const TUNNELS: Section = { id: 'tunnels', label: 'Túneis', icon: Network }
 
 /** Painel da VPS: o que o servidor está fazendo agora (além dos arquivos). Fica montado para guardar o histórico. */
 export function Panel({ vpsId, active, closed, onOpenLive }: Props) {
@@ -34,7 +36,7 @@ export function Panel({ vpsId, active, closed, onOpenLive }: Props) {
     if (active && !closed && !available) api.services.availability(vpsId).then(setAvailable, () => setAvailable({ systemd: false, docker: false }))
   }, [active, closed, available, vpsId])
 
-  const sections = [OVERVIEW, ...(available?.systemd ? [SYSTEMD] : []), ...(available?.docker ? [DOCKER] : [])]
+  const sections = [OVERVIEW, ...(available?.systemd ? [SYSTEMD] : []), ...(available?.docker ? [DOCKER] : []), TUNNELS]
   return (
     <div className={`absolute inset-0 flex bg-bg ${active ? '' : 'hidden'}`}>
       <nav className="w-44 shrink-0 border-r border-line bg-panel py-2" aria-label="Seções do painel">
@@ -53,6 +55,7 @@ export function Panel({ vpsId, active, closed, onOpenLive }: Props) {
       <div className="relative min-w-0 flex-1">
         {section === OVERVIEW.id && <Dashboard vpsId={vpsId} active={live} />}
         {section === SYSTEMD.id && <SystemdView vpsId={vpsId} active={live} onOpenLive={onOpenLive} />}
+        {section === TUNNELS.id && <TunnelsView vpsId={vpsId} active={live} />}
         {section === DOCKER.id && <DockerView vpsId={vpsId} active={live} onOpenLive={onOpenLive} />}
       </div>
     </div>

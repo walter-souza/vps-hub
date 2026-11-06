@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { normalizePath } from '../shared/paths'
-import type { VpsConnection, VpsFields, VpsInput } from '../shared/types'
+import type { TunnelDef, VpsConnection, VpsFields, VpsInput } from '../shared/types'
 import { AppError } from './errors'
 
 interface StoredConnection extends VpsFields {
@@ -12,6 +12,7 @@ interface StoredConnection extends VpsFields {
   secret?: string
   lastConnectedAt?: number
   favorites?: string[]
+  tunnels?: TunnelDef[]
 }
 
 interface StoreData {
@@ -22,6 +23,7 @@ interface StoreData {
 }
 
 const MAX_FAVORITES = 50
+const MAX_TUNNELS = 30
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
@@ -79,7 +81,7 @@ class ConnectionStore {
   }
 
   private toPublic({ secret, ...rest }: StoredConnection): VpsConnection {
-    return { ...rest, jumpId: rest.jumpId ?? '', hasSecret: !!secret, favorites: rest.favorites ?? [] }
+    return { ...rest, jumpId: rest.jumpId ?? '', hasSecret: !!secret, favorites: rest.favorites ?? [], tunnels: rest.tunnels ?? [] }
   }
 
   list(): VpsConnection[] {
@@ -134,6 +136,13 @@ class ConnectionStore {
     if (!Array.isArray(paths)) throw new AppError('Lista de favoritos inválida.')
     const c = this.get(id)
     c.favorites = [...new Set(paths.filter((p) => typeof p === 'string' && p.startsWith('/')).map(normalizePath))].slice(0, MAX_FAVORITES)
+    this.persist()
+    return this.toPublic(c)
+  }
+
+  setTunnels(id: string, tunnels: TunnelDef[]): VpsConnection {
+    const c = this.get(id)
+    c.tunnels = tunnels.slice(0, MAX_TUNNELS)
     this.persist()
     return this.toPublic(c)
   }

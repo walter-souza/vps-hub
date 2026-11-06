@@ -65,6 +65,13 @@ const api: VpsApi = {
   stats: {
     get: (id) => invoke('stats:get', id)
   },
+  tunnels: {
+    add: (vpsId, def) => invoke('tunnels:add', vpsId, def),
+    remove: (vpsId, tunnelId) => invoke('tunnels:remove', vpsId, tunnelId),
+    status: (vpsId) => invoke('tunnels:status', vpsId),
+    start: (vpsId, tunnelId) => invoke('tunnels:start', vpsId, tunnelId),
+    stop: (vpsId, tunnelId) => invoke('tunnels:stop', vpsId, tunnelId)
+  },
   services: {
     availability: (id) => invoke('services:availability', id),
     listUnits: (id) => invoke('services:listUnits', id),

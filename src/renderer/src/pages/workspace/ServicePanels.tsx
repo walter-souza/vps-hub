@@ -34,12 +34,12 @@ function useList<T>(load: () => Promise<T[]>, active: boolean) {
 const GOOD = new Set(['active', 'running', 'up'])
 const BAD = new Set(['failed', 'dead', 'exited', 'restarting'])
 
-function Badge({ state, text }: { state: string; text?: string }) {
+export function Badge({ state, text }: { state: string; text?: string }) {
   const tone = GOOD.has(state) ? 'bg-ok/20 text-ok' : state === 'failed' ? 'bg-danger/20 text-danger' : BAD.has(state) ? 'bg-warn/20 text-warn' : 'bg-panel-2 text-muted'
   return <span className={`inline-block rounded px-1.5 py-0.5 text-xs ${tone}`}>{text ?? state}</span>
 }
 
-function IconButton({ label, icon: Icon, onClick, disabled, danger }: { label: string; icon: typeof Play; onClick: () => void; disabled?: boolean; danger?: boolean }) {
+export function IconButton({ label, icon: Icon, onClick, disabled, danger }: { label: string; icon: typeof Play; onClick: () => void; disabled?: boolean; danger?: boolean }) {
   return (
     <button
       aria-label={label}
@@ -53,7 +53,7 @@ function IconButton({ label, icon: Icon, onClick, disabled, danger }: { label: s
   )
 }
 
-function Toolbar({ children, onRefresh, count }: { children?: ReactNode; onRefresh: () => void; count: string }) {
+export function Toolbar({ children, onRefresh, count }: { children?: ReactNode; onRefresh: () => void; count: string }) {
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3">
       {children}
@@ -66,7 +66,7 @@ function Toolbar({ children, onRefresh, count }: { children?: ReactNode; onRefre
   )
 }
 
-function Message({ children, danger }: { children: ReactNode; danger?: boolean }) {
+export function Message({ children, danger }: { children: ReactNode; danger?: boolean }) {
   return (
     <div className={`flex h-full items-center justify-center px-6 text-center whitespace-pre-line ${danger ? 'text-danger' : 'text-muted'}`} role={danger ? 'alert' : undefined}>
       {children}
@@ -74,7 +74,7 @@ function Message({ children, danger }: { children: ReactNode; danger?: boolean }
   )
 }
 
-const inputClass = 'h-7 rounded-md border border-line bg-bg px-2 text-xs outline-none focus:border-accent'
+export const inputClass = 'h-7 rounded-md border border-line bg-bg px-2 text-xs outline-none focus:border-accent'
 
 // ---------- systemd ----------
 

@@ -6,6 +6,7 @@ import { toApiError } from './errors'
 import * as files from './files'
 import { connectSession, disconnect, probe, testConnection } from './sessions'
 import { startLog, stopLog } from './logs'
+import * as tunnels from './tunnels'
 import * as services from './services'
 import { getStats } from './stats'
 import { setSudo } from './sudo'
@@ -92,6 +93,12 @@ export function registerIpc(): void {
   handle('trash:list', trash.list)
   handle('trash:restore', trash.restore)
   handle('trash:purge', trash.purge)
+
+  handle('tunnels:add', tunnels.addTunnel)
+  handle('tunnels:remove', tunnels.removeTunnel)
+  handle('tunnels:status', tunnels.tunnelStatus)
+  handle('tunnels:start', tunnels.startTunnel)
+  handle('tunnels:stop', tunnels.stopTunnel)
 
   handle('logs:start', startLog)
   ipcMain.on('logs:stop', (_e, streamId) => stopLog(streamId))

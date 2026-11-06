@@ -24,6 +24,25 @@ export interface VpsConnection extends VpsFields {
   lastConnectedAt?: number
   /** Pastas fixadas no Acesso rápido desta VPS. */
   favorites: string[]
+  /** Túneis de porta salvos (porta local da sua máquina → host:porta alcançado pela VPS). */
+  tunnels: TunnelDef[]
+}
+
+/** Túnel local (como `ssh -L`): escuta em 127.0.0.1:localPort e leva as conexões até remoteHost:remotePort pela VPS. */
+export interface TunnelDef {
+  id: string
+  localPort: number
+  remoteHost: string
+  remotePort: number
+}
+
+export interface TunnelStatus {
+  running: boolean
+  /** Conexões abertas agora e desde que o túnel foi iniciado. */
+  active: number
+  total: number
+  /** Último erro (ex.: o destino recusou a conexão). */
+  error?: string
 }
 
 export interface VpsInput extends VpsFields {
@@ -311,6 +330,13 @@ export interface VpsApi {
   }
   stats: {
     get(id: string): Promise<SystemStats>
+  }
+  tunnels: {
+    add(vpsId: string, def: Omit<TunnelDef, 'id'>): Promise<VpsConnection>
+    remove(vpsId: string, tunnelId: string): Promise<VpsConnection>
+    status(vpsId: string): Promise<Record<string, TunnelStatus>>
+    start(vpsId: string, tunnelId: string): Promise<void>
+    stop(vpsId: string, tunnelId: string): Promise<void>
   }
   services: {
     availability(id: string): Promise<ServicesAvailability>
