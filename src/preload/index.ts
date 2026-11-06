@@ -36,6 +36,7 @@ const api: VpsApi = {
     list: (id, path) => invoke('fs:list', id, path),
     read: (id, path) => invoke('fs:read', id, path),
     readImage: (id, path) => invoke('fs:readImage', id, path),
+    readTail: (id, path) => invoke('fs:readTail', id, path),
     write: (id, path, content, expectedMtime, encoding) => invoke('fs:write', id, path, content, expectedMtime, encoding),
     createFile: (id, path) => invoke('fs:createFile', id, path),
     mkdir: (id, path) => invoke('fs:mkdir', id, path),

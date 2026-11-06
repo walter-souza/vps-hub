@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises'
 import { basename, extname, join } from 'node:path'
 import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2'
 import { baseName, imageMime, joinPath, normalizePath, parentPath } from '../shared/paths'
-import type { BinaryContent, FileContent, FileEntry, TextEncoding, TransferEvent } from '../shared/types'
+import type { BinaryContent, FileContent, FileEntry, TailContent, TextEncoding, TransferEvent } from '../shared/types'
 import { decodeText, encodeText, isTextEncoding } from './encoding'
 import { AppError, toAppError } from './errors'
 import { emit } from './events'
@@ -22,6 +22,7 @@ export function call<T = void>(fn: (cb: Cb<T>) => void): Promise<T> {
 const noop = () => {}
 const MAX_EDIT_BYTES = 5 * 1024 * 1024
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024
+const TAIL_BYTES = 512 * 1024
 
 export function remotePath(p: unknown): string {
   if (typeof p !== 'string' || !p.startsWith('/') || p.includes('\0')) throw new AppError('Caminho inválido.')
@@ -83,9 +84,23 @@ export async function read(id: string, p: string): Promise<FileContent> {
   const path = remotePath(p)
   const st = await call<Stats>((cb) => sftp.stat(path, cb))
   if (st.isDirectory()) throw new AppError('Não é possível editar uma pasta.')
-  if (st.size > MAX_EDIT_BYTES) throw new AppError('Arquivo grande demais para o editor (máx. 5 MB). Use "Baixar".')
+  if (st.size > MAX_EDIT_BYTES) throw new AppError('Arquivo grande demais para o editor (máx. 5 MB). Use "Baixar".', 'TOO_LARGE')
   const { text, encoding } = decodeText(await call<Buffer>((cb) => sftp.readFile(path, cb)))
   return { content: text, mtime: st.mtime, encoding }
+}
+
+/** Lê só o final do arquivo, sem a linha cortada no começo; o texto segue a mesma detecção de codificação do editor. */
+export async function readTail(id: string, p: string): Promise<TailContent> {
+  const { sftp } = getSession(id)
+  const path = remotePath(p)
+  const st = await call<Stats>((cb) => sftp.stat(path, cb))
+  if (st.isDirectory()) throw new AppError('Não é possível abrir uma pasta.')
+  const start = Math.max(0, st.size - TAIL_BYTES)
+  const chunks: Buffer[] = []
+  if (st.size > 0) for await (const chunk of sftp.createReadStream(path, { start, end: st.size - 1 })) chunks.push(chunk as Buffer)
+  let buf = Buffer.concat(chunks)
+  if (start > 0) buf = buf.subarray(buf.indexOf(10) + 1) // o começo caiu no meio de uma linha (e talvez de um caractere)
+  return { content: decodeText(buf).text, size: st.size, truncated: start > 0 }
 }
 
 export async function readImage(id: string, p: string): Promise<BinaryContent> {

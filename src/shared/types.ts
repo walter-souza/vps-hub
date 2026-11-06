@@ -156,6 +156,15 @@ export interface FileContent {
   encoding: TextEncoding
 }
 
+/** Final de um arquivo grande (log), para leitura. */
+export interface TailContent {
+  content: string
+  /** Tamanho total do arquivo no servidor. */
+  size: number
+  /** O começo do arquivo ficou de fora. */
+  truncated: boolean
+}
+
 export interface BinaryContent {
   data: Uint8Array
   mime: string
@@ -205,6 +214,8 @@ export interface VpsApi {
   fs: {
     list(id: string, path: string): Promise<FileEntry[]>
     read(id: string, path: string): Promise<FileContent>
+    /** Últimos ~512 KB de um arquivo de texto (começa numa linha inteira): para logs grandes demais para o editor. */
+    readTail(id: string, path: string): Promise<TailContent>
     /** Lê uma imagem (só tipos conhecidos, até 25 MB) para o visualizador. */
     readImage(id: string, path: string): Promise<BinaryContent>
     /** expectedMtime null = sobrescrever sem checar conflito. Retorna o novo mtime. */

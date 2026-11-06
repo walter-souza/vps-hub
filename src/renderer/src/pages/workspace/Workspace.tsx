@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowLeftRight, ChevronDown, FileImage, FolderOpen, Plus, SquareTerminal, WifiOff, X } from 'lucide-react'
+import { ArrowLeft, ArrowLeftRight, ChevronDown, FileImage, FolderOpen, Plus, ScrollText, SquareTerminal, WifiOff, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { baseName, imageMime, mediaInfo } from '../../../../shared/paths'
 import { Button } from '../../components/ui'
@@ -10,6 +10,7 @@ import { toast, useApp } from '../../lib/store'
 import { EditorView, type OpenFile } from './EditorView'
 import { Explorer } from './Explorer'
 import { ImageView } from './ImageView'
+import { LogView } from './LogView'
 import { MediaView } from './MediaView'
 import { TerminalView } from './TerminalView'
 import { Transfers } from './Transfers'
@@ -23,6 +24,7 @@ interface TermTab {
 const EXPLORER = 'explorer'
 const TRANSFERS = 'transfers'
 const viewerTab = (path: string) => `view:${path}`
+const logTab = (path: string) => `log:${path}`
 
 export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   const session = useApp((s) => s.sessions[id])
@@ -36,6 +38,8 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   filesRef.current = files
   /** Abas de visualização (imagem, áudio, vídeo, PDF); o componente sai da extensão. */
   const [viewers, setViewers] = useState<string[]>([])
+  /** Abas de log: final de arquivos grandes demais para o editor, com atualização ao vivo. */
+  const [logs, setLogs] = useState<string[]>([])
   const [tab, setTab] = useState(EXPLORER)
   const [terms, setTerms] = useState<TermTab[]>([])
   const termSeq = useRef(0)
@@ -70,7 +74,9 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
         setFiles((fs) => (fs.some((f) => f.path === path) ? fs : [...fs, { path, content, saved: content, mtime, encoding, saving: false, reveal }]))
         setTab(path)
       } catch (e) {
-        toast('error', errMsg(e))
+        if (errCode(e) !== 'TOO_LARGE') return toast('error', errMsg(e))
+        setLogs((ls) => (ls.includes(path) ? ls : [...ls, path]))
+        setTab(logTab(path))
       }
     },
     [id]
@@ -122,6 +128,11 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   const closeViewer = (path: string) => {
     setViewers((vs) => vs.filter((p) => p !== path))
     if (tab === viewerTab(path)) setTab(EXPLORER)
+  }
+
+  const closeLog = (path: string) => {
+    setLogs((ls) => ls.filter((p) => p !== path))
+    if (tab === logTab(path)) setTab(EXPLORER)
   }
 
   const openTerminal = useCallback((cwd: string) => {
@@ -186,6 +197,9 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onClose={() => closeFile(f.path)}
             />
           ))}
+          {logs.map((p) => (
+            <Tab key={p} active={tab === logTab(p)} onClick={() => setTab(logTab(p))} icon={<ScrollText size={13} />} label={baseName(p)} title={`${p} (final do arquivo)`} onClose={() => closeLog(p)} />
+          ))}
           {viewers.map((p) => (
             <Tab
               key={p}
@@ -246,6 +260,9 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onOpenPath={(p) => openFile(p)}
             />
           ))}
+        {logs.filter((p) => logTab(p) === tab).map((p) => (
+          <LogView key={p} vpsId={id} path={p} />
+        ))}
         {viewers
           .filter((p) => viewerTab(p) === tab)
           .map((p) =>
