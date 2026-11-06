@@ -43,6 +43,7 @@ App desktop para Windows que reúne suas VPS num só lugar e deixa você **naveg
 
 - **Serviços (systemd)**: lista com estado, "no boot" e descrição, filtro por texto e estado (ativos, com falha, inativos); iniciar, reiniciar, parar (com confirmação), habilitar ou desabilitar no boot e ver o `systemctl status`.
 - **Docker**: lista de contêineres (imagem, estado, portas) com iniciar, reiniciar, parar e remover (com confirmação). As duas seções só aparecem se o servidor tem systemd ou Docker. Sem permissão, a mensagem sugere o modo sudo.
+- **Dois painéis**: botão "Dois painéis" na barra mostra dois explorers da mesma VPS lado a lado, cada um com sua pasta, histórico e seleção. Arraste de um para o outro (Ctrl copia) ou use "Copiar/Mover para o outro painel" no menu; os dois se atualizam sozinhos.
 - **Logs ao vivo**: acompanhe em tempo real o `journalctl -f` (do sistema ou de um serviço), o `docker logs -f` de um contêiner ou qualquer arquivo (menu "Acompanhar ao vivo", `tail -F`, que segue rotações). Mostra as últimas 200 linhas, tem filtro, pausar e limpar; fechar a aba encerra o processo no servidor. No modo sudo roda como root.
 
 ### Editor, terminal e transferências
@@ -85,7 +86,7 @@ npm run test:e2e   # testes de ponta a ponta (precisa do Docker Desktop rodando)
 
 ### Testes
 
-`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda **131 cenários**: conexão e host key, explorador, editor, transferências (cancelar e repetir), terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar entre VPS, seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
+`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda **136 cenários**: conexão e host key, explorador, editor, transferências (cancelar e repetir), terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar entre VPS, seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
 
 Para rodar só uma suíte (depois de `npm run build`):
 

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowLeftRight, ChevronDown, FileImage, FolderOpen, Gauge, Plus, ScrollText, SquareTerminal, WifiOff, X } from 'lucide-react'
+import { ArrowLeft, ArrowLeftRight, ChevronDown, Columns2, FileImage, FolderOpen, Gauge, Plus, ScrollText, SquareTerminal, WifiOff, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { baseName, imageMime, mediaInfo } from '../../../../shared/paths'
 import type { LogSource } from '../../../../shared/types'
@@ -48,6 +48,8 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   const [logs, setLogs] = useState<string[]>([])
   /** Abas de log ao vivo (journal, contêiner ou arquivo), cada uma com seu fluxo no servidor. */
   const [live, setLive] = useState<LogSource[]>([])
+  /** Dois painéis de arquivos lado a lado; o segundo fica montado depois de aberto, para guardar a pasta e a seleção. */
+  const [split, setSplit] = useState<'off' | 'on' | 'hidden'>('off')
   const [tab, setTab] = useState(EXPLORER)
   const [terms, setTerms] = useState<TermTab[]>([])
   const termSeq = useRef(0)
@@ -239,6 +241,18 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
         <Button
           variant="ghost"
           size="sm"
+          onClick={() => {
+            setSplit((s) => (s === 'on' ? 'hidden' : 'on'))
+            setTab(EXPLORER)
+          }}
+          aria-pressed={split === 'on'}
+          title="Dois painéis de arquivos lado a lado"
+        >
+          <Columns2 size={14} /> Dois painéis
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => (terms.length === 0 ? openTerminal('') : setPanel((p) => ({ ...p, open: !p.open })))}
           title="Terminal"
         >
@@ -261,15 +275,32 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
       )}
 
       <main className="relative min-h-0 flex-1">
-        <Explorer
-          vps={vps}
-          info={session.info}
-          closed={session.closed}
-          hidden={tab !== EXPLORER}
-          onOpenFile={openFile}
-          onOpenTerminal={openTerminal}
-          onOpenLive={openLive}
-        />
+        <div className={`absolute inset-0 flex ${tab !== EXPLORER ? 'hidden' : ''}`}>
+          <div className="relative min-w-0 flex-1">
+            <Explorer
+              vps={vps}
+              info={session.info}
+              closed={session.closed}
+              hidden={tab !== EXPLORER}
+              onOpenFile={openFile}
+              onOpenTerminal={openTerminal}
+              onOpenLive={openLive}
+            />
+          </div>
+          {split !== 'off' && (
+            <div className={`relative min-w-0 flex-1 border-l border-line ${split === 'hidden' ? 'hidden' : ''}`} aria-label="Segundo painel" role="region">
+              <Explorer
+                vps={vps}
+                info={session.info}
+                closed={session.closed}
+                hidden={tab !== EXPLORER || split === 'hidden'}
+                onOpenFile={openFile}
+                onOpenTerminal={openTerminal}
+                onOpenLive={openLive}
+              />
+            </div>
+          )}
+        </div>
         {files
           .filter((f) => f.path === tab)
           .map((f) => (

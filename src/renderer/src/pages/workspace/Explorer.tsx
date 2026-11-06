@@ -39,6 +39,7 @@ import { ContextMenu, type MenuEntry, type MenuState } from '../../components/Co
 import { Button } from '../../components/ui'
 import { FileIcon } from '../../components/FileIcon'
 import { api, errCode, errMsg } from '../../lib/api'
+import { dragPaths, notifyFsChange, peerCwd, registerPane, type Pane } from '../../lib/panes'
 import { setSudo } from '../../lib/sudo'
 import { confirm, prompt } from '../../lib/dialogs'
 import { formatDate, formatSize } from '../../lib/format'
@@ -127,7 +128,21 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     [id]
   )
 
-  const refresh = useCallback((select?: string[]) => load(cwdRef.current, select), [load])
+  // Modo dois painéis: este explorer avisa os vizinhos da mesma VPS quando muda arquivos e recarrega quando eles mudam.
+  const self = useRef<Pane>({ vpsId: id, cwd: () => null, reload: () => {} })
+  self.current.cwd = () => (hidden ? null : cwdRef.current)
+  self.current.reload = () => {
+    if (!useApp.getState().sessions[id]?.closed) load(cwdRef.current)
+  }
+  useEffect(() => registerPane(self.current), [])
+
+  const refresh = useCallback(
+    (select?: string[]) => {
+      notifyFsChange(id, self.current)
+      return load(cwdRef.current, select)
+    },
+    [load, id]
+  )
 
   // Carga inicial e recarga após reconectar. Se a pasta inicial não existir, cai na home.
   const firstLoad = useRef(true)
@@ -366,8 +381,15 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       toast('error', errMsg(e))
     } finally {
       await refresh(destDir === cwdRef.current && done ? done : undefined)
+      if (srcId !== id) notifyFsChange(srcId, null) // cortar de outra VPS muda a origem também
     }
     return done
+  }
+
+  /** Copia ou move para a pasta do outro painel. */
+  const sendToPeer = async (list: FileEntry[], dir: string, mode: PasteMode) => {
+    const done = await transfer(id, list.map((e) => e.path), dir, mode)
+    if (done) toast('success', `${done.length} item(ns) ${mode === 'cut' ? 'movido(s)' : 'copiado(s)'} para ${dir}.`)
   }
 
   const paste = async (destDir: string) => {
@@ -438,6 +460,13 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       { label: 'Copiar', icon: Copy, shortcut: 'Ctrl+C', onClick: () => toClipboard(list, 'copy') }
     )
     if (single && entry.isDir && clipboard) items.push({ label: 'Colar nesta pasta', icon: ClipboardPaste, onClick: () => paste(entry.path) })
+    const peer = peerCwd(id, self.current)
+    if (peer && peer !== cwd && !isTrashPath(cwd) && !isTrashPath(peer)) {
+      items.push(
+        { label: 'Copiar para o outro painel', icon: Copy, onClick: () => sendToPeer(list, peer, 'copy') },
+        { label: 'Mover para o outro painel', icon: FolderInput, onClick: () => sendToPeer(list, peer, 'cut') }
+      )
+    }
     items.push('sep')
     if (single) {
       items.push(
@@ -553,8 +582,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   }
 
   // ---------- Arrastar e soltar ----------
-  // Itens arrastados dentro do app ficam num ref: durante o arraste o navegador não deixa ler os dados.
-  const dragPaths = useRef<string[] | null>(null)
+  // Itens arrastados dentro do app ficam num ref compartilhado entre painéis (lib/panes): durante o arraste o navegador não deixa ler os dados.
   const [dragging, setDragging] = useState<Set<string>>(new Set())
   const [dropHint, setDropHint] = useState<{ key: string; text: string; sub?: string; x: number; y: number } | null>(null)
   const spring = useRef<{ key: string; timer: ReturnType<typeof setTimeout> } | null>(null)
