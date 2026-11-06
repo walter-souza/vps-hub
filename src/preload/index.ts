@@ -65,6 +65,14 @@ const api: VpsApi = {
   stats: {
     get: (id) => invoke('stats:get', id)
   },
+  services: {
+    availability: (id) => invoke('services:availability', id),
+    listUnits: (id) => invoke('services:listUnits', id),
+    unitAction: (id, name, action) => invoke('services:unitAction', id, name, action),
+    unitStatus: (id, name) => invoke('services:unitStatus', id, name),
+    listContainers: (id) => invoke('services:listContainers', id),
+    containerAction: (id, target, action) => invoke('services:containerAction', id, target, action)
+  },
   transfers: {
     onProgress: (cb) => on('transfer:progress', cb),
     cancel: (transferId) => invoke('transfers:cancel', transferId),

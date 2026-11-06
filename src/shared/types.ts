@@ -203,6 +203,38 @@ export interface SystemStats {
   network: { rxRate: number | null; txRate: number | null; rxTotal: number; txTotal: number }
 }
 
+/** O que o servidor tem para o painel de serviços. */
+export interface ServicesAvailability {
+  systemd: boolean
+  docker: boolean
+}
+
+export type ServiceAction = 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable'
+export type ContainerAction = 'start' | 'stop' | 'restart' | 'remove'
+
+export interface ServiceUnit {
+  /** Ex.: "nginx.service". */
+  name: string
+  load: string
+  /** active, inactive, failed, activating… */
+  active: string
+  sub: string
+  description: string
+  /** enabled, disabled, static… (vazio se desconhecido). */
+  enabled: string
+}
+
+export interface ContainerInfo {
+  id: string
+  name: string
+  image: string
+  /** running, exited, paused, restarting… */
+  state: string
+  status: string
+  ports: string
+  createdAt: string
+}
+
 export interface ApiErrorShape {
   message: string
   code?: string
@@ -274,6 +306,14 @@ export interface VpsApi {
   }
   stats: {
     get(id: string): Promise<SystemStats>
+  }
+  services: {
+    availability(id: string): Promise<ServicesAvailability>
+    listUnits(id: string): Promise<ServiceUnit[]>
+    unitAction(id: string, name: string, action: ServiceAction): Promise<void>
+    unitStatus(id: string, name: string): Promise<string>
+    listContainers(id: string): Promise<ContainerInfo[]>
+    containerAction(id: string, target: string, action: ContainerAction): Promise<void>
   }
   transfers: {
     onProgress(cb: (e: TransferEvent) => void): Unsubscribe

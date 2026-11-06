@@ -41,6 +41,9 @@ App desktop para Windows que reúne suas VPS num só lugar e deixa você **naveg
 ### Painel
 - **Visão geral** (aba "Painel"): CPU (total e por núcleo), memória e swap, rede (↓↑ por segundo), discos, carga, uptime e kernel, atualizados a cada 2 s enquanto a aba está à frente, com gráficos dos últimos 2 minutos. Lê `/proc`, então funciona em qualquer Linux sem instalar nada no servidor.
 
+- **Serviços (systemd)**: lista com estado, "no boot" e descrição, filtro por texto e estado (ativos, com falha, inativos); iniciar, reiniciar, parar (com confirmação), habilitar ou desabilitar no boot e ver o `systemctl status`.
+- **Docker**: lista de contêineres (imagem, estado, portas) com iniciar, reiniciar, parar e remover (com confirmação). As duas seções só aparecem se o servidor tem systemd ou Docker. Sem permissão, a mensagem sugere o modo sudo.
+
 ### Editor, terminal e transferências
 - **Áudio, vídeo e PDF** (mp3, wav, ogg, m4a, flac, mp4, webm, mov, pdf…): duplo clique abre um reprodutor, ou o leitor de PDF do Chromium (zoom, miniaturas, busca no texto). O arquivo chega em streaming (com avanço e retrocesso), sem baixar tudo antes.
 - **Visualizador de imagens** (png, jpg, gif, webp, bmp, ico, avif, svg até 25 MB): abre ao dar duplo clique, com zoom (roda do mouse, 100%, ajustar), arrastar para mover, fundo xadrez e dimensões. SVG é exibido só como imagem (scripts não rodam) e "Ver código" abre no editor.
@@ -81,7 +84,7 @@ npm run test:e2e   # testes de ponta a ponta (precisa do Docker Desktop rodando)
 
 ### Testes
 
-`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda **118 cenários**: conexão e host key, explorador, editor, transferências (cancelar e repetir), terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar entre VPS, seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
+`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda **125 cenários**: conexão e host key, explorador, editor, transferências (cancelar e repetir), terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar entre VPS, seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
 
 Para rodar só uma suíte (depois de `npm run build`):
 
