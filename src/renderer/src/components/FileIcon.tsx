@@ -1,4 +1,4 @@
-import { File, FileArchive, FileCode, FileCog, FileImage, FileJson, FileSymlink, FileText, Folder, FolderSymlink } from 'lucide-react'
+import { File, FileArchive, FileAudio, FileCode, FileCog, FileImage, FileJson, FileSymlink, FileText, FileVideo, Folder, FolderSymlink } from 'lucide-react'
 import type { FileEntry } from '../../../shared/types'
 
 const byExt: Record<string, typeof File> = {}
@@ -6,6 +6,8 @@ const add = (icon: typeof File, exts: string) => exts.split(' ').forEach((e) => 
 add(FileCode, 'js mjs cjs ts tsx jsx py php rb go rs java c h cpp cs sh bash zsh html css scss vue svelte sql lua pl')
 add(FileJson, 'json jsonc')
 add(FileImage, 'png jpg jpeg gif svg webp ico bmp avif')
+add(FileVideo, 'mp4 m4v webm ogv mov mkv avi')
+add(FileAudio, 'mp3 wav ogg oga opus m4a aac flac')
 add(FileArchive, 'zip tar gz tgz bz2 xz 7z rar zst')
 add(FileCog, 'conf cfg ini env toml yml yaml service lock')
 add(FileText, 'md txt log csv rst')

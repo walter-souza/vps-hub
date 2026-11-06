@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
 import { join } from 'node:path'
 import { registerIpc } from './ipc'
+import { registerMediaProtocol, registerMediaScheme } from './media'
 import { store } from './store'
 
 function createWindow(): void {
@@ -54,9 +55,12 @@ function createWindow(): void {
 // Sem menu: evita atalhos como Ctrl+R e Ctrl+W, que descartariam edições abertas.
 Menu.setApplicationMenu(null)
 
+registerMediaScheme()
+
 app.whenReady().then(() => {
   store.load()
   registerIpc()
+  registerMediaProtocol()
   createWindow()
 })
 

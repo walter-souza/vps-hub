@@ -1,6 +1,6 @@
 import { ArrowLeft, ArrowLeftRight, ChevronDown, FileImage, FolderOpen, Plus, SquareTerminal, WifiOff, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { baseName, imageMime } from '../../../../shared/paths'
+import { baseName, imageMime, mediaInfo } from '../../../../shared/paths'
 import { Button } from '../../components/ui'
 import { api, errCode, errMsg } from '../../lib/api'
 import { connectVps } from '../../lib/connect'
@@ -10,6 +10,7 @@ import { toast, useApp } from '../../lib/store'
 import { EditorView, type OpenFile } from './EditorView'
 import { Explorer } from './Explorer'
 import { ImageView } from './ImageView'
+import { MediaView } from './MediaView'
 import { TerminalView } from './TerminalView'
 import { Transfers } from './Transfers'
 
@@ -21,7 +22,7 @@ interface TermTab {
 
 const EXPLORER = 'explorer'
 const TRANSFERS = 'transfers'
-const imageTab = (path: string) => `img:${path}`
+const viewerTab = (path: string) => `view:${path}`
 
 export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   const session = useApp((s) => s.sessions[id])
@@ -33,7 +34,8 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   const [files, setFiles] = useState<OpenFile[]>([])
   const filesRef = useRef(files)
   filesRef.current = files
-  const [images, setImages] = useState<string[]>([])
+  /** Abas de visualização (imagem, áudio, vídeo, PDF); o componente sai da extensão. */
+  const [viewers, setViewers] = useState<string[]>([])
   const [tab, setTab] = useState(EXPLORER)
   const [terms, setTerms] = useState<TermTab[]>([])
   const termSeq = useRef(0)
@@ -53,9 +55,9 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
 
   const openFile = useCallback(
     async (path: string, line?: number, asText = false) => {
-      if (!asText && imageMime(baseName(path))) {
-        setImages((is) => (is.includes(path) ? is : [...is, path]))
-        return setTab(imageTab(path))
+      if (!asText && (imageMime(baseName(path)) || mediaInfo(baseName(path)))) {
+        setViewers((vs) => (vs.includes(path) ? vs : [...vs, path]))
+        return setTab(viewerTab(path))
       }
       // seq muda a cada pedido, para rolar de novo mesmo que a linha seja a mesma.
       const reveal = line ? { line, seq: Date.now() } : undefined
@@ -117,9 +119,9 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
     if (tab === path) setTab(rest.at(-1)?.path ?? EXPLORER)
   }
 
-  const closeImage = (path: string) => {
-    setImages((is) => is.filter((p) => p !== path))
-    if (tab === imageTab(path)) setTab(EXPLORER)
+  const closeViewer = (path: string) => {
+    setViewers((vs) => vs.filter((p) => p !== path))
+    if (tab === viewerTab(path)) setTab(EXPLORER)
   }
 
   const openTerminal = useCallback((cwd: string) => {
@@ -184,15 +186,15 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onClose={() => closeFile(f.path)}
             />
           ))}
-          {images.map((p) => (
+          {viewers.map((p) => (
             <Tab
               key={p}
-              active={tab === imageTab(p)}
-              onClick={() => setTab(imageTab(p))}
+              active={tab === viewerTab(p)}
+              onClick={() => setTab(viewerTab(p))}
               icon={<FileImage size={13} />}
               label={baseName(p)}
               title={p}
-              onClose={() => closeImage(p)}
+              onClose={() => closeViewer(p)}
             />
           ))}
         </div>
@@ -244,11 +246,15 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onOpenPath={(p) => openFile(p)}
             />
           ))}
-        {images
-          .filter((p) => imageTab(p) === tab)
-          .map((p) => (
-            <ImageView key={p} vpsId={id} path={p} onViewAsText={() => openFile(p, undefined, true)} />
-          ))}
+        {viewers
+          .filter((p) => viewerTab(p) === tab)
+          .map((p) =>
+            imageMime(baseName(p)) ? (
+              <ImageView key={p} vpsId={id} path={p} onViewAsText={() => openFile(p, undefined, true)} />
+            ) : (
+              <MediaView key={p} vpsId={id} path={p} />
+            )
+          )}
       </main>
 
       {/* Painel inferior: mantido montado para não derrubar os terminais ao recolher */}
