@@ -33,6 +33,7 @@ export function cleanFields(i: VpsInput): VpsFields {
   const auth = i.auth === 'key' ? 'key' : 'password'
   const keyPath = auth === 'key' ? str(i.keyPath).trim() : ''
   const initialPath = str(i.initialPath).trim()
+  const jumpId = str(i.jumpId).trim()
   if (!name) throw new AppError('Informe um nome para a conexão.')
   if (!host) throw new AppError('Informe o host.')
   if (!username) throw new AppError('Informe o usuário.')
@@ -45,7 +46,7 @@ export function cleanFields(i: VpsInput): VpsFields {
   const tags = Array.isArray(i.tags)
     ? [...new Set(i.tags.map((t) => str(t).trim()).filter(Boolean))].slice(0, 10)
     : []
-  return { name, host, port, username, auth, keyPath, initialPath, color, tags }
+  return { name, host, port, username, auth, keyPath, initialPath, jumpId, color, tags }
 }
 
 async function encrypt(secret: string): Promise<string> {
@@ -78,7 +79,7 @@ class ConnectionStore {
   }
 
   private toPublic({ secret, ...rest }: StoredConnection): VpsConnection {
-    return { ...rest, hasSecret: !!secret, favorites: rest.favorites ?? [] }
+    return { ...rest, jumpId: rest.jumpId ?? '', hasSecret: !!secret, favorites: rest.favorites ?? [] }
   }
 
   list(): VpsConnection[] {
@@ -106,6 +107,7 @@ class ConnectionStore {
   async save(input: VpsInput, id?: string): Promise<VpsConnection> {
     const fields = cleanFields(input)
     const existing = id ? this.get(id) : undefined
+    this.checkJump(fields.jumpId, existing?.id)
     let secret = existing && existing.auth === fields.auth ? existing.secret : undefined
     if (!input.rememberSecret) secret = undefined
     else if (input.secret) secret = await encrypt(input.secret)
@@ -115,6 +117,17 @@ class ConnectionStore {
     else this.data.connections.push(next)
     this.persist()
     return this.toPublic(next)
+  }
+
+  /** O jump host precisa existir e a cadeia de jumps não pode voltar para a própria conexão. */
+  private checkJump(jumpId: string, selfId: string | undefined): void {
+    if (!jumpId) return
+    let next: StoredConnection | undefined = this.data.connections.find((c) => c.id === jumpId)
+    if (!next) throw new AppError('Jump host não encontrado.')
+    for (let hops = 0; next; hops++) {
+      if (next.id === selfId || hops > 10) throw new AppError('Os jump hosts formam um ciclo.')
+      next = next.jumpId ? this.data.connections.find((c) => c.id === next!.jumpId) : undefined
+    }
   }
 
   setFavorites(id: string, paths: string[]): VpsConnection {
@@ -127,6 +140,8 @@ class ConnectionStore {
 
   remove(id: string): void {
     this.data.connections = this.data.connections.filter((c) => c.id !== id)
+    // Quem usava esta conexão como jump host passa a conectar direto.
+    for (const c of this.data.connections) if (c.jumpId === id) c.jumpId = ''
     this.persist()
   }
 

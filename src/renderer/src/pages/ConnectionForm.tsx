@@ -15,7 +15,9 @@ interface Props {
 
 export function ConnectionForm({ conn, duplicate, onClose }: Props) {
   const upsert = useApp((s) => s.upsertConnection)
+  const connections = useApp((s) => s.connections)
   const editId = conn && !duplicate ? conn.id : undefined
+  const others = connections.filter((c) => c.id !== editId)
   const [f, setF] = useState(() => ({
     name: conn ? (duplicate ? `${conn.name} (cópia)` : conn.name) : '',
     host: conn?.host ?? '',
@@ -24,6 +26,7 @@ export function ConnectionForm({ conn, duplicate, onClose }: Props) {
     auth: (conn?.auth ?? 'password') as AuthMethod,
     keyPath: conn?.keyPath ?? '',
     initialPath: conn?.initialPath ?? '',
+    jumpId: conn?.jumpId ?? '',
     color: conn?.color ?? COLORS[0],
     tags: conn?.tags.join(', ') ?? '',
     secret: '',
@@ -145,6 +148,22 @@ export function ConnectionForm({ conn, duplicate, onClose }: Props) {
           />
           Lembrar {f.auth === 'password' ? 'a senha' : 'a passphrase'} (criptografada pelo Windows)
         </label>
+
+        <Field label="Jump host" className="col-span-6" hint="Opcional: conecta por dentro de outra VPS salva (como ProxyJump). O jump precisa ter a senha salva, ou já estar conectado.">
+          <select
+            value={f.jumpId}
+            onChange={(e) => set('jumpId', e.target.value)}
+            aria-label="Jump host"
+            className="h-9 w-full rounded-md border border-line bg-bg px-2 text-sm outline-none focus:border-accent"
+          >
+            <option value="">Nenhum (conexão direta)</option>
+            {others.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.username}@{c.host})
+              </option>
+            ))}
+          </select>
+        </Field>
 
         <Field label="Pasta inicial" className="col-span-3" hint="Vazio = home do usuário.">
           <Input value={f.initialPath} onChange={(e) => set('initialPath', e.target.value)} placeholder="/var/www" spellCheck={false} />

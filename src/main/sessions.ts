@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { connect as tcpConnect } from 'node:net'
 import { homedir } from 'node:os'
-import { Client, utils, type AuthenticationType, type ConnectConfig, type SFTPWrapper } from 'ssh2'
+import type { Duplex } from 'node:stream'
+import { Client, utils, type AuthenticationType, type ClientChannel, type ConnectConfig, type SFTPWrapper } from 'ssh2'
 import type { SessionInfo, TestResult, VpsFields, VpsInput } from '../shared/types'
 import { AppError, toAppError } from './errors'
 import { emit } from './events'
@@ -93,7 +94,7 @@ async function loadKey(keyPath: string, passphrase?: string): Promise<Buffer> {
   return data
 }
 
-async function openClient(f: VpsFields, secret: string | undefined): Promise<Client> {
+async function openClient(f: VpsFields, secret: string | undefined, sock?: Duplex): Promise<Client> {
   const config: ConnectConfig = {
     host: f.host,
     port: f.port,
@@ -101,7 +102,9 @@ async function openClient(f: VpsFields, secret: string | undefined): Promise<Cli
     // Inclui o tempo em que o usuário confirma a host key no diálogo.
     readyTimeout: 60_000,
     keepaliveInterval: 15_000,
-    keepaliveCountMax: 4
+    keepaliveCountMax: 4,
+    // Via jump host: a conexão passa por este canal em vez de abrir um socket TCP.
+    ...(sock ? { sock } : {})
   }
   if (f.auth === 'password') {
     if (!secret) throw new AppError('Informe a senha.', 'SECRET_REQUIRED')
@@ -169,6 +172,53 @@ async function openClient(f: VpsFields, secret: string | undefined): Promise<Cli
   })
 }
 
+const MAX_JUMPS = 4
+
+/**
+ * Abre o cliente SSH de uma conexão, passando por um jump host (ProxyJump) se ela tiver um. O jump é
+ * reaproveitado se já estiver conectado; senão é aberto só para isso (precisa de senha/passphrase salva)
+ * e fechado junto com a conexão final.
+ */
+async function openVia(f: VpsFields, secret: string | undefined, depth = 0): Promise<Client> {
+  if (!f.jumpId) return openClient(f, secret)
+  if (depth >= MAX_JUMPS) throw new AppError('Cadeia de jump hosts longa demais.')
+  const jump = store.get(f.jumpId)
+  const label = `Jump host "${jump.name}"`
+  const live = sessions.get(jump.id)
+  let jumpClient: Client
+  if (live) jumpClient = live.client
+  else {
+    try {
+      jumpClient = await openVia(jump, await store.getSecret(jump.id), depth + 1)
+    } catch (e) {
+      const err = toAppError(e)
+      throw new AppError(err.code === 'SECRET_REQUIRED' ? `${label} precisa de senha ou passphrase salva; conecte a ele primeiro.` : `${label}: ${err.message}`, err.code === 'SECRET_REQUIRED' ? undefined : err.code)
+    }
+  }
+  const owned = !live
+  let channel: ClientChannel
+  try {
+    channel = await new Promise<ClientChannel>((resolve, reject) =>
+      jumpClient.forwardOut('127.0.0.1', 0, f.host, f.port, (e, ch) => (e ? reject(e) : resolve(ch)))
+    )
+  } catch (e) {
+    if (owned) jumpClient.end()
+    throw new AppError(`${label} não conseguiu encaminhar até ${f.host}:${f.port}: ${toAppError(e).message}`)
+  }
+  const release = () => {
+    channel.destroy()
+    if (owned) jumpClient.end()
+  }
+  try {
+    const client = await openClient(f, secret, channel)
+    client.once('close', release)
+    return client
+  } catch (e) {
+    release()
+    throw e
+  }
+}
+
 /** Prefixo do sudo sem terminal: lê a senha da entrada padrão, ou falha se ela for necessária. */
 export const sudoPrefix = (password?: string) => (password === undefined ? 'sudo -n' : "sudo -S -p ''")
 
@@ -218,7 +268,7 @@ export function connectSession(id: string, secretOverride?: string): Promise<Ses
 
   const p = (async () => {
     const c = store.get(id)
-    const client = await openClient(c, secretOverride || (await store.getSecret(id)))
+    const client = await openVia(c, secretOverride || (await store.getSecret(id)))
     try {
       const sftp = await new Promise<SFTPWrapper>((res, rej) =>
         client.sftp((e, s) => (e ? rej(toAppError(e)) : res(s)))
@@ -258,7 +308,7 @@ export async function testConnection(input: VpsInput, id?: string): Promise<Test
   const fields = cleanFields(input)
   const existing = id ? store.get(id) : undefined
   const secret = input.secret || (existing && existing.auth === fields.auth ? await store.getSecret(existing.id) : undefined)
-  const client = await openClient(fields, secret)
+  const client = await openVia(fields, secret)
   try {
     const start = Date.now()
     const { os } = await sysInfo(client)
@@ -270,7 +320,10 @@ export async function testConnection(input: VpsInput, id?: string): Promise<Test
 
 /** Mede a latência TCP até a porta SSH; null = inacessível. */
 export function probe(id: string): Promise<number | null> {
-  const { host, port } = store.get(id)
+  // Via jump host, o que dá para medir é o alcance do primeiro jump da cadeia.
+  let c = store.get(id)
+  for (let hops = 0; c.jumpId && hops < MAX_JUMPS; hops++) c = store.get(c.jumpId)
+  const { host, port } = c
   return new Promise((resolve) => {
     const start = Date.now()
     const sock = tcpConnect({ host, port })

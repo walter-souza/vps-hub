@@ -73,7 +73,9 @@ export function resolveHosts(blocks: Block[]): SshConfigHost[] {
       auth: keyPath ? 'key' : 'password',
       keyPath: keyPath ?? '',
       warning: proxy
-        ? 'Usa ProxyJump/ProxyCommand, que o VPS Hub ainda não suporta.'
+        ? get('proxyjump')
+          ? `Usa ProxyJump (${get('proxyjump')}): depois de importar, escolha o jump host na conexão.`
+          : 'Usa ProxyCommand, que o VPS Hub não suporta.'
         : identity && !existsSync(expandHome(identity))
           ? `Chave não encontrada: ${expandHome(identity)}`
           : undefined

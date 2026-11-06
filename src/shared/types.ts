@@ -11,6 +11,8 @@ export interface VpsFields {
   keyPath: string
   /** Pasta aberta ao conectar; vazio = home do usuário. */
   initialPath: string
+  /** Id de outra conexão usada como jump host (ProxyJump); vazio = conexão direta. */
+  jumpId: string
   color: string
   tags: string[]
 }

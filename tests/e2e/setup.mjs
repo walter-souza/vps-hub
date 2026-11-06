@@ -33,6 +33,11 @@ export async function globalSetup() {
     )
   }
   await Promise.all(Object.values(SERVERS).map((s) => waitForSsh(s.port)))
+  // A imagem desliga AllowTcpForwarding; o teste de jump host precisa dele ligado (HUP faz o sshd reler o arquivo).
+  for (const s of Object.values(SERVERS)) {
+    docker('exec', '-u', '0', s.name, 'sh', '-c', "sed -i 's/^AllowTcpForwarding no/AllowTcpForwarding yes/' /config/sshd/sshd_config && kill -HUP $(cat /config/sshd.pid)")
+  }
+  await Promise.all(Object.values(SERVERS).map((s) => waitForSsh(s.port)))
   writeFileSync(STATE_FILE, JSON.stringify({ dir, keyPath, password: PASSWORD, passphrase: PASSPHRASE, ...SERVERS }))
 }
 

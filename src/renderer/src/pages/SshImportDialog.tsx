@@ -44,6 +44,7 @@ export function SshImportDialog({ onClose }: { onClose: () => void }) {
             auth: h.auth,
             keyPath: h.keyPath,
             initialPath: '',
+            jumpId: '',
             color: COLORS[i % COLORS.length],
             tags: ['ssh-config'],
             rememberSecret: true
