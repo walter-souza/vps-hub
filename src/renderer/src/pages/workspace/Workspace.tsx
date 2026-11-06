@@ -66,8 +66,8 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
         return setTab(path)
       }
       try {
-        const { content, mtime } = await api.fs.read(id, path)
-        setFiles((fs) => (fs.some((f) => f.path === path) ? fs : [...fs, { path, content, saved: content, mtime, saving: false, reveal }]))
+        const { content, mtime, encoding } = await api.fs.read(id, path)
+        setFiles((fs) => (fs.some((f) => f.path === path) ? fs : [...fs, { path, content, saved: content, mtime, encoding, saving: false, reveal }]))
         setTab(path)
       } catch (e) {
         toast('error', errMsg(e))
@@ -82,7 +82,7 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
     const content = file.content
     patchFile(path, { saving: true })
     try {
-      const mtime = await api.fs.write(id, path, content, force ? null : file.mtime)
+      const mtime = await api.fs.write(id, path, content, force ? null : file.mtime, file.encoding)
       patchFile(path, { saved: content, mtime, saving: false })
     } catch (e) {
       patchFile(path, { saving: false })
@@ -102,8 +102,8 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
     if (!file) return
     if (file.content !== file.saved && !(await confirm({ title: 'Descartar alterações?', message: 'O arquivo será recarregado do servidor e suas alterações serão perdidas.', confirmLabel: 'Recarregar', danger: true }))) return
     try {
-      const { content, mtime } = await api.fs.read(id, path)
-      patchFile(path, { content, saved: content, mtime })
+      const { content, mtime, encoding } = await api.fs.read(id, path)
+      patchFile(path, { content, saved: content, mtime, encoding })
     } catch (e) {
       toast('error', errMsg(e))
     }

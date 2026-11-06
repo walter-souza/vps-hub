@@ -7,7 +7,8 @@ import { pipeline } from 'node:stream/promises'
 import { basename, extname, join } from 'node:path'
 import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2'
 import { baseName, imageMime, joinPath, normalizePath, parentPath } from '../shared/paths'
-import type { BinaryContent, FileContent, FileEntry, TransferEvent } from '../shared/types'
+import type { BinaryContent, FileContent, FileEntry, TextEncoding, TransferEvent } from '../shared/types'
+import { decodeText, encodeText, isTextEncoding } from './encoding'
 import { AppError, toAppError } from './errors'
 import { emit } from './events'
 import { getSession, type Session } from './sessions'
@@ -83,16 +84,8 @@ export async function read(id: string, p: string): Promise<FileContent> {
   const st = await call<Stats>((cb) => sftp.stat(path, cb))
   if (st.isDirectory()) throw new AppError('Não é possível editar uma pasta.')
   if (st.size > MAX_EDIT_BYTES) throw new AppError('Arquivo grande demais para o editor (máx. 5 MB). Use "Baixar".')
-  const buf = await call<Buffer>((cb) => sftp.readFile(path, cb))
-  if (buf.subarray(0, 8000).includes(0)) throw new AppError('Arquivo binário não pode ser editado. Use "Baixar".')
-  let content: string
-  try {
-    // ignoreBOM mantém o BOM no texto, para que ele seja preservado ao salvar.
-    content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buf)
-  } catch {
-    throw new AppError('O arquivo não está em UTF-8; editá-lo poderia corromper o conteúdo. Use "Baixar".')
-  }
-  return { content, mtime: st.mtime }
+  const { text, encoding } = decodeText(await call<Buffer>((cb) => sftp.readFile(path, cb)))
+  return { content: text, mtime: st.mtime, encoding }
 }
 
 export async function readImage(id: string, p: string): Promise<BinaryContent> {
@@ -127,15 +120,15 @@ async function writeAtomic(sftp: SFTPWrapper, path: string, data: Buffer, mode: 
   }
 }
 
-export async function write(id: string, p: string, content: string, expectedMtime: number | null): Promise<number> {
+export async function write(id: string, p: string, content: string, expectedMtime: number | null, encoding: TextEncoding = 'utf-8'): Promise<number> {
   const { sftp, uid } = getSession(id)
   const path = remotePath(p)
-  if (typeof content !== 'string') throw new AppError('Conteúdo inválido.')
+  if (typeof content !== 'string' || !isTextEncoding(encoding)) throw new AppError('Conteúdo inválido.')
+  const data = encodeText(content, encoding) // antes de tocar no servidor: falha se algum caractere não couber
   const st = await statOrNull(sftp, path)
   if (st && expectedMtime != null && st.mtime !== expectedMtime) {
     throw new AppError('O arquivo foi alterado no servidor depois que você o abriu.', 'CONFLICT')
   }
-  const data = Buffer.from(content, 'utf8')
   // O rename atômico trocaria o dono do arquivo; só é usado quando o arquivo já é nosso.
   const atomic = st && st.uid === uid && (await writeAtomic(sftp, path, data, st.mode & 0o7777))
   if (!atomic) await call((cb) => sftp.writeFile(path, data, cb))

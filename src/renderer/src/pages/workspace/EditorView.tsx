@@ -3,6 +3,8 @@ import { Eye, RotateCw, Save } from 'lucide-react'
 import { useDeferredValue, useEffect, useRef, useState } from 'react'
 import type { editor } from 'monaco-editor'
 import { Button } from '../../components/ui'
+import { ENCODING_LABEL } from '../../../../shared/encoding'
+import type { TextEncoding } from '../../../../shared/types'
 import { modelUri } from '../../lib/monaco'
 import { isMarkdown, MarkdownPreview } from './MarkdownPreview'
 
@@ -13,6 +15,8 @@ export interface OpenFile {
   saved: string
   mtime: number | null
   saving: boolean
+  /** Codificação do arquivo no servidor (mostrada quando não é UTF-8). */
+  encoding: TextEncoding
   /** Linha a exibir (ex.: resultado de busca). */
   reveal?: { line: number; seq: number }
 }
@@ -52,6 +56,11 @@ export function EditorView({ vpsId, file, onChange, onSave, onReload, onRevealed
     <div className="absolute inset-0 flex flex-col">
       <div className="flex h-9 shrink-0 items-center gap-3 border-b border-line bg-panel px-3 text-xs">
         <span className="truncate font-mono text-muted">{file.path}</span>
+        {file.encoding !== 'utf-8' && (
+          <span className="rounded bg-hover px-1.5 py-0.5 text-muted" title="O arquivo será salvo nesta mesma codificação">
+            {ENCODING_LABEL[file.encoding]}
+          </span>
+        )}
         <span className={dirty ? 'text-warn' : 'text-muted'}>{file.saving ? 'Salvando…' : dirty ? '● Não salvo' : 'Salvo'}</span>
         <div className="flex-1" />
         {markdown && (

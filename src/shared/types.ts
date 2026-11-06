@@ -147,9 +147,13 @@ export interface FileEntry {
   group: string
 }
 
+/** Codificação em que o arquivo foi lido; o editor o regrava do mesmo jeito. */
+export type TextEncoding = 'utf-8' | 'utf-16le' | 'utf-16be' | 'windows-1252'
+
 export interface FileContent {
   content: string
   mtime: number
+  encoding: TextEncoding
 }
 
 export interface BinaryContent {
@@ -204,7 +208,7 @@ export interface VpsApi {
     /** Lê uma imagem (só tipos conhecidos, até 25 MB) para o visualizador. */
     readImage(id: string, path: string): Promise<BinaryContent>
     /** expectedMtime null = sobrescrever sem checar conflito. Retorna o novo mtime. */
-    write(id: string, path: string, content: string, expectedMtime: number | null): Promise<number>
+    write(id: string, path: string, content: string, expectedMtime: number | null, encoding?: TextEncoding): Promise<number>
     createFile(id: string, path: string): Promise<void>
     mkdir(id: string, path: string): Promise<void>
     rename(id: string, from: string, to: string): Promise<void>
