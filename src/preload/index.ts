@@ -19,6 +19,7 @@ const api: VpsApi = {
     list: () => invoke('connections:list'),
     save: (input, id) => invoke('connections:save', input, id),
     remove: (id) => invoke('connections:remove', id),
+    setFavorites: (id, paths) => invoke('connections:setFavorites', id, paths),
     test: (input, id) => invoke('connections:test', input, id),
     probe: (id) => invoke('connections:probe', id),
     pickKeyFile: () => invoke('connections:pickKeyFile'),

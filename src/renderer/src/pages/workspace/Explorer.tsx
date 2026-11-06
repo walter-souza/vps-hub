@@ -25,6 +25,8 @@ import {
   Search,
   ShieldCheck,
   SquareTerminal,
+  Star,
+  StarOff,
   Trash2,
   Upload
 } from 'lucide-react'
@@ -437,7 +439,12 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
         { label: 'Renomear', icon: Pencil, shortcut: 'F2', onClick: () => rename(entry) },
         { label: 'Copiar caminho', icon: ClipboardCopy, onClick: () => copyPath(entry.path) }
       )
-      if (entry.isDir) items.push({ label: 'Abrir terminal aqui', icon: SquareTerminal, onClick: () => onOpenTerminal(entry.path) })
+      if (entry.isDir) {
+        items.push(
+          { label: 'Abrir terminal aqui', icon: SquareTerminal, onClick: () => onOpenTerminal(entry.path) },
+          favoriteItem(entry.path)
+        )
+      }
     }
     items.push({ label: 'Permissões e dono…', icon: ShieldCheck, shortcut: 'Alt+Enter', onClick: () => setPermsFor(list) })
     items.push({ label: 'Compactar…', icon: FileArchive, onClick: () => setCompressFor(list) })
@@ -453,6 +460,21 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     items.push({ label: 'Excluir permanentemente', icon: Trash2, shortcut: 'Shift+Del', danger: true, onClick: () => remove(list, true) })
     setMenu({ x: e.clientX, y: e.clientY, items })
   }
+
+  // ---------- Favoritos (por VPS) ----------
+  const upsertConnection = useApp((s) => s.upsertConnection)
+  const favorites = vps.favorites
+  const toggleFavorite = (path: string) =>
+    run(async () => {
+      const next = favorites.includes(path) ? favorites.filter((p) => p !== path) : [...favorites, path]
+      upsertConnection(await api.connections.setFavorites(id, next))
+    })
+
+  const favoriteItem = (path: string): MenuEntry => ({
+    label: favorites.includes(path) ? 'Remover dos favoritos' : 'Adicionar aos favoritos',
+    icon: favorites.includes(path) ? StarOff : Star,
+    onClick: () => toggleFavorite(path)
+  })
 
   const backgroundMenu = (e: MouseEvent) => {
     e.preventDefault()
@@ -471,6 +493,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
         'sep',
         { label: 'Abrir terminal aqui', icon: SquareTerminal, onClick: () => onOpenTerminal(cwd) },
         { label: 'Copiar caminho da pasta', icon: ClipboardCopy, onClick: () => copyPath(cwd) },
+        favoriteItem(cwd),
         { label: showHidden ? 'Ocultar arquivos ocultos' : 'Mostrar arquivos ocultos', icon: showHidden ? EyeOff : Eye, onClick: () => setShowHidden((v) => !v) }
       ]
     })
@@ -829,6 +852,29 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
               <span className="truncate">{p.label}</span>
             </button>
           ))}
+          {favorites.length > 0 && (
+            <>
+              <div className="mx-3 my-2 h-px bg-line" />
+              <div className="mb-1 px-3 text-[11px] font-semibold tracking-wide text-muted uppercase">Favoritos</div>
+              {favorites.map((path) => (
+                <button
+                  key={path}
+                  onClick={() => navigate(path)}
+                  onContextMenu={(ev) => {
+                    ev.preventDefault()
+                    setMenu({ x: ev.clientX, y: ev.clientY, items: [favoriteItem(path)] })
+                  }}
+                  title={path}
+                  data-favorite={path}
+                  {...dropProps({ dir: path }, path)}
+                  className={`flex h-7 w-full items-center gap-2 px-3 text-left ${dropHint?.key === path ? 'bg-accent/40 text-fg ring-1 ring-accent ring-inset' : view === 'files' && cwd === path ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
+                >
+                  <Star size={14} className="shrink-0 text-warn" />
+                  <span className="truncate">{baseName(path) || '/'}</span>
+                </button>
+              ))}
+            </>
+          )}
           <div className="mx-3 my-2 h-px bg-line" />
           <button
             onClick={() => setView('trash')}

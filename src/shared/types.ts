@@ -20,6 +20,8 @@ export interface VpsConnection extends VpsFields {
   id: string
   hasSecret: boolean
   lastConnectedAt?: number
+  /** Pastas fixadas no Acesso rápido desta VPS. */
+  favorites: string[]
 }
 
 export interface VpsInput extends VpsFields {
@@ -177,6 +179,7 @@ export interface VpsApi {
     list(): Promise<VpsConnection[]>
     save(input: VpsInput, id?: string): Promise<VpsConnection>
     remove(id: string): Promise<void>
+    setFavorites(id: string, paths: string[]): Promise<VpsConnection>
     test(input: VpsInput, id?: string): Promise<TestResult>
     probe(id: string): Promise<number | null>
     pickKeyFile(): Promise<string | null>

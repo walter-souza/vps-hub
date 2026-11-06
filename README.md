@@ -27,7 +27,7 @@ App desktop para Windows que reúne suas VPS num só lugar e deixa você **naveg
 - **Queda de conexão**: as abas continuam abertas e um botão reconecta, sem perder edições.
 
 ### Explorador
-- Navegação com histórico, caminho clicável e editável (Ctrl+L, aceita `~`), Acesso rápido, ordenação, filtro e arquivos ocultos.
+- Navegação com histórico, caminho clicável e editável (Ctrl+L, aceita `~`), Acesso rápido com **favoritos por VPS** (botão direito numa pasta → "Adicionar aos favoritos"; também aceitam arrastar e soltar), ordenação, filtro e arquivos ocultos.
 - **Seleção como no Windows**: clique, Ctrl/Shift+clique, **retângulo de seleção** a partir do espaço em branco (Ctrl inverte, Shift soma, rola sozinho), Home/End/PageUp/PageDown (com Shift), Ctrl+setas e Ctrl+Espaço, e digitar o começo do nome para pular até o item.
 - **Arrastar e soltar**: arraste pelo ícone/nome para uma pasta, um trecho do caminho ou o Acesso rápido para **mover** (Ctrl copia), ou para a Lixeira. Sem confirmação, com **Desfazer** na notificação. Um balão mostra a ação e o destino; parar sobre uma pasta a abre, e parar sobre Voltar/Pasta acima sai dela. Cancelar (Esc) volta à pasta de origem.
 - **Arquivos do Windows**: arraste arquivos e pastas do seu PC para enviar, direto para a pasta onde soltar.

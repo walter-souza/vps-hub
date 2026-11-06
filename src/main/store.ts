@@ -2,6 +2,7 @@ import { app, safeStorage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { normalizePath } from '../shared/paths'
 import type { VpsConnection, VpsFields, VpsInput } from '../shared/types'
 import { AppError } from './errors'
 
@@ -10,6 +11,7 @@ interface StoredConnection extends VpsFields {
   /** Segredo criptografado com safeStorage (DPAPI no Windows), em base64. */
   secret?: string
   lastConnectedAt?: number
+  favorites?: string[]
 }
 
 interface StoreData {
@@ -18,6 +20,8 @@ interface StoreData {
   /** "host:porta" -> fingerprint SHA256 da host key aceita. */
   knownHosts: Record<string, string>
 }
+
+const MAX_FAVORITES = 50
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
@@ -74,7 +78,7 @@ class ConnectionStore {
   }
 
   private toPublic({ secret, ...rest }: StoredConnection): VpsConnection {
-    return { ...rest, hasSecret: !!secret }
+    return { ...rest, hasSecret: !!secret, favorites: rest.favorites ?? [] }
   }
 
   list(): VpsConnection[] {
@@ -111,6 +115,14 @@ class ConnectionStore {
     else this.data.connections.push(next)
     this.persist()
     return this.toPublic(next)
+  }
+
+  setFavorites(id: string, paths: string[]): VpsConnection {
+    if (!Array.isArray(paths)) throw new AppError('Lista de favoritos inválida.')
+    const c = this.get(id)
+    c.favorites = [...new Set(paths.filter((p) => typeof p === 'string' && p.startsWith('/')).map(normalizePath))].slice(0, MAX_FAVORITES)
+    this.persist()
+    return this.toPublic(c)
   }
 
   remove(id: string): void {

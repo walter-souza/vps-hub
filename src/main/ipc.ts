@@ -41,6 +41,7 @@ export function registerIpc(): void {
     disconnect(id)
     store.remove(id)
   })
+  handle('connections:setFavorites', (id, paths) => store.setFavorites(id, paths))
   handle('connections:test', testConnection)
   handle('connections:probe', probe)
   handle('connections:pickKeyFile', pickKeyFile)
