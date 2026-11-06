@@ -5,6 +5,7 @@ import type { Result } from '../shared/types'
 import { toApiError } from './errors'
 import * as files from './files'
 import { connectSession, disconnect, probe, testConnection } from './sessions'
+import { getStats } from './stats'
 import { setSudo } from './sudo'
 import { readSshConfig } from './sshConfig'
 import { store } from './store'
@@ -76,6 +77,8 @@ export function registerIpc(): void {
   handle('fs:revealLocal', files.revealLocal)
   handle('transfers:cancel', files.cancelTransfer)
   handle('transfers:retry', files.retryTransfer)
+
+  handle('stats:get', getStats)
 
   handle('trash:list', trash.list)
   handle('trash:restore', trash.restore)

@@ -181,6 +181,28 @@ export interface TransferEvent {
   error?: string
 }
 
+export interface DiskUsage {
+  filesystem: string
+  mount: string
+  /** Bytes. */
+  total: number
+  used: number
+}
+
+/** Métricas do servidor (taxas = null na primeira leitura, que ainda não tem com o que comparar). */
+export interface SystemStats {
+  at: number
+  hostname: string
+  kernel: string
+  /** Segundos desde o boot. */
+  uptime: number
+  load: [number, number, number]
+  cpu: { percent: number | null; cores: number; perCore: (number | null)[] }
+  memory: { total: number; used: number; available: number; swapTotal: number; swapUsed: number }
+  disks: DiskUsage[]
+  network: { rxRate: number | null; txRate: number | null; rxTotal: number; txTotal: number }
+}
+
 export interface ApiErrorShape {
   message: string
   code?: string
@@ -249,6 +271,9 @@ export interface VpsApi {
     restore(id: string, trashIds: string[]): Promise<void>
     /** Apaga de vez os itens indicados; sem trashIds, esvazia a lixeira. */
     purge(id: string, trashIds?: string[]): Promise<void>
+  }
+  stats: {
+    get(id: string): Promise<SystemStats>
   }
   transfers: {
     onProgress(cb: (e: TransferEvent) => void): Unsubscribe

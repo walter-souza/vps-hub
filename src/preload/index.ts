@@ -62,6 +62,9 @@ const api: VpsApi = {
     restore: (id, trashIds) => invoke('trash:restore', id, trashIds),
     purge: (id, trashIds) => invoke('trash:purge', id, trashIds)
   },
+  stats: {
+    get: (id) => invoke('stats:get', id)
+  },
   transfers: {
     onProgress: (cb) => on('transfer:progress', cb),
     cancel: (transferId) => invoke('transfers:cancel', transferId),

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowLeftRight, ChevronDown, FileImage, FolderOpen, Plus, ScrollText, SquareTerminal, WifiOff, X } from 'lucide-react'
+import { ArrowLeft, ArrowLeftRight, ChevronDown, FileImage, FolderOpen, Gauge, Plus, ScrollText, SquareTerminal, WifiOff, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { baseName, imageMime, mediaInfo } from '../../../../shared/paths'
 import { Button } from '../../components/ui'
@@ -11,6 +11,7 @@ import { EditorView, type OpenFile } from './EditorView'
 import { Explorer } from './Explorer'
 import { ImageView } from './ImageView'
 import { LogView } from './LogView'
+import { Panel } from './Panel'
 import { MediaView } from './MediaView'
 import { TerminalView } from './TerminalView'
 import { Transfers } from './Transfers'
@@ -22,6 +23,7 @@ interface TermTab {
 }
 
 const EXPLORER = 'explorer'
+const PANEL = 'panel'
 const TRANSFERS = 'transfers'
 const viewerTab = (path: string) => `view:${path}`
 const logTab = (path: string) => `log:${path}`
@@ -186,6 +188,7 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
         </div>
         <div className="no-drag flex h-full min-w-0 items-end gap-0.5 overflow-x-auto" role="tablist">
           <Tab active={tab === EXPLORER} onClick={() => setTab(EXPLORER)} icon={<FolderOpen size={13} />} label="Arquivos" />
+          <Tab active={tab === PANEL} onClick={() => setTab(PANEL)} icon={<Gauge size={13} />} label="Painel" />
           {files.map((f) => (
             <Tab
               key={f.path}
@@ -260,6 +263,7 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onOpenPath={(p) => openFile(p)}
             />
           ))}
+        <Panel vpsId={id} active={tab === PANEL && !hidden} closed={session.closed} />
         {logs.filter((p) => logTab(p) === tab).map((p) => (
           <LogView key={p} vpsId={id} path={p} />
         ))}
