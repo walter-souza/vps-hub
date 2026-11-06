@@ -55,6 +55,25 @@ test('soltar um item num favorito move para a pasta', async () => {
   assert.equal(sh(`test -e ${DIR}/projeto/a.txt && echo sim || echo nao`), 'sim')
 })
 
+const order = () => win.locator('[data-favorite]').evaluateAll((els) => els.map((e) => e.getAttribute('data-favorite')))
+
+test('reordenar favoritos: arrastar para baixo/cima de outro e pelo menu, com persistência', async () => {
+  assert.deepEqual(await order(), [`${DIR}/projeto`, DIR])
+  const target = favorite(DIR)
+  const box = await target.boundingBox()
+  await favorite(`${DIR}/projeto`).dragTo(target, { targetPosition: { x: 20, y: box.height - 3 } })
+  await win.waitForFunction(([a]) => document.querySelector('[data-favorite]')?.getAttribute('data-favorite') === a, [DIR])
+  assert.deepEqual(await order(), [DIR, `${DIR}/projeto`])
+
+  await favorite(`${DIR}/projeto`).click({ button: 'right' })
+  assert.equal(await win.getByRole('menuitem', { name: 'Mover para baixo' }).isDisabled(), true, 'o último não desce')
+  await win.getByRole('menuitem', { name: 'Mover para cima' }).click()
+  await win.waitForFunction(([a]) => document.querySelector('[data-favorite]')?.getAttribute('data-favorite') === a, [`${DIR}/projeto`])
+  assert.deepEqual(await order(), [`${DIR}/projeto`, DIR])
+  const id = (await callApi(win, 'connections.list')).data.find((c) => c.name === 'Fav').id
+  assert.deepEqual((await callApi(win, 'connections.list')).data.find((c) => c.id === id).favorites, [`${DIR}/projeto`, DIR], 'salvo na conexão')
+})
+
 test('os favoritos persistem ao reabrir o app e remover pelo menu funciona', async () => {
   await app.close()
   ;({ app, win, errors } = await launchApp({ userData }))

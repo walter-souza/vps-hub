@@ -518,11 +518,34 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
       upsertConnection(await api.connections.setFavorites(id, next))
     })
 
+  /** Reordenar: o favorito arrastado entra antes ou depois do alvo (metade de cima ou de baixo da linha). */
+  const favDrag = useRef<string | null>(null)
+  const [favOver, setFavOver] = useState<{ path: string; after: boolean } | null>(null)
+  const reorderFavorite = (from: string, to: string, after: boolean) => {
+    if (from === to) return
+    const rest = favorites.filter((p) => p !== from)
+    rest.splice(rest.indexOf(to) + (after ? 1 : 0), 0, from)
+    if (rest.every((p, i) => p === favorites[i])) return
+    return run(async () => upsertConnection(await api.connections.setFavorites(id, rest)))
+  }
+  const moveFavorite = (path: string, delta: -1 | 1) => {
+    const target = favorites[favorites.indexOf(path) + delta]
+    if (target) reorderFavorite(path, target, delta === 1)
+  }
+
   const favoriteItem = (path: string): MenuEntry => ({
     label: favorites.includes(path) ? 'Remover dos favoritos' : 'Adicionar aos favoritos',
     icon: favorites.includes(path) ? StarOff : Star,
     onClick: () => toggleFavorite(path)
   })
+  const favoriteMenu = (path: string): MenuEntry[] => {
+    const i = favorites.indexOf(path)
+    return [
+      favoriteItem(path),
+      { label: 'Mover para cima', icon: ChevronUp, disabled: i <= 0, onClick: () => moveFavorite(path, -1) },
+      { label: 'Mover para baixo', icon: ChevronDown, disabled: i < 0 || i >= favorites.length - 1, onClick: () => moveFavorite(path, 1) }
+    ]
+  }
 
   const backgroundMenu = (e: MouseEvent) => {
     e.preventDefault()
@@ -914,23 +937,56 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
             <>
               <div className="mx-3 my-2 h-px bg-line" />
               <div className="mb-1 px-3 text-[11px] font-semibold tracking-wide text-muted uppercase">Favoritos</div>
-              {favorites.map((path) => (
+              {favorites.map((path) => {
+                const drop = dropProps({ dir: path }, path)
+                const over = (e: DragEvent) => {
+                  if (!favDrag.current) return drop.onDragOver(e)
+                  e.preventDefault()
+                  e.stopPropagation()
+                  e.dataTransfer.dropEffect = 'move'
+                  const box = e.currentTarget.getBoundingClientRect()
+                  setFavOver({ path, after: e.clientY > box.top + box.height / 2 })
+                }
+                return (
                 <button
                   key={path}
+                  draggable
+                  onDragStart={(e) => {
+                    favDrag.current = path
+                    e.dataTransfer.setData('application/x-vpshub-favorite', path)
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
+                  onDragEnd={() => {
+                    favDrag.current = null
+                    setFavOver(null)
+                  }}
                   onClick={() => navigate(path)}
                   onContextMenu={(ev) => {
                     ev.preventDefault()
-                    setMenu({ x: ev.clientX, y: ev.clientY, items: [favoriteItem(path)] })
+                    setMenu({ x: ev.clientX, y: ev.clientY, items: favoriteMenu(path) })
                   }}
                   title={path}
                   data-favorite={path}
-                  {...dropProps({ dir: path }, path)}
-                  className={`flex h-7 w-full items-center gap-2 px-3 text-left ${dropHint?.key === path ? 'bg-accent/40 text-fg ring-1 ring-accent ring-inset' : view === 'files' && cwd === path ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
+                  onDragEnter={over}
+                  onDragOver={over}
+                  onDragLeave={(e) => (favDrag.current ? setFavOver((o) => (o?.path === path ? null : o)) : drop.onDragLeave(e))}
+                  onDrop={(e) => {
+                    if (!favDrag.current) return drop.onDrop(e)
+                    e.preventDefault()
+                    e.stopPropagation()
+                    const from = favDrag.current
+                    const after = favOver?.path === path && favOver.after
+                    favDrag.current = null
+                    setFavOver(null)
+                    reorderFavorite(from, path, after)
+                  }}
+                  className={`flex h-7 w-full items-center gap-2 border-y-2 border-transparent px-3 text-left ${favOver?.path === path ? (favOver.after ? 'border-b-accent' : 'border-t-accent') : ''} ${dropHint?.key === path ? 'bg-accent/40 text-fg ring-1 ring-accent ring-inset' : view === 'files' && cwd === path ? 'bg-hover text-fg' : 'text-muted hover:bg-hover hover:text-fg'}`}
                 >
                   <Star size={14} className="shrink-0 text-warn" />
                   <span className="truncate">{baseName(path) || '/'}</span>
                 </button>
-              ))}
+                )
+              })}
             </>
           )}
           <div className="mx-3 my-2 h-px bg-line" />
