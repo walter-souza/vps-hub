@@ -62,17 +62,18 @@ export function imageMime(name: string): string | null {
   return dot > 0 ? (IMAGE_MIME[name.slice(dot + 1).toLowerCase()] ?? null) : null
 }
 
-export type MediaKind = 'video' | 'audio'
+export type MediaKind = 'video' | 'audio' | 'pdf'
 
 const MEDIA: Record<string, { kind: MediaKind; mime: string }> = {
   mp4: { kind: 'video', mime: 'video/mp4' }, m4v: { kind: 'video', mime: 'video/mp4' }, webm: { kind: 'video', mime: 'video/webm' },
   ogv: { kind: 'video', mime: 'video/ogg' }, mov: { kind: 'video', mime: 'video/quicktime' },
   mp3: { kind: 'audio', mime: 'audio/mpeg' }, wav: { kind: 'audio', mime: 'audio/wav' }, ogg: { kind: 'audio', mime: 'audio/ogg' },
   oga: { kind: 'audio', mime: 'audio/ogg' }, opus: { kind: 'audio', mime: 'audio/ogg' }, m4a: { kind: 'audio', mime: 'audio/mp4' },
-  aac: { kind: 'audio', mime: 'audio/aac' }, flac: { kind: 'audio', mime: 'audio/flac' }
+  aac: { kind: 'audio', mime: 'audio/aac' }, flac: { kind: 'audio', mime: 'audio/flac' },
+  pdf: { kind: 'pdf', mime: 'application/pdf' }
 }
 
-/** Tipo e MIME de áudio ou vídeo que o app sabe exibir, ou null para outros arquivos. */
+/** Tipo e MIME de áudio, vídeo ou PDF que o app sabe exibir, ou null para outros arquivos. */
 export function mediaInfo(name: string): { kind: MediaKind; mime: string } | null {
   const dot = name.lastIndexOf('.')
   return dot > 0 ? (MEDIA[name.slice(dot + 1).toLowerCase()] ?? null) : null

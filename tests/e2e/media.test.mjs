@@ -1,7 +1,7 @@
 // Áudio e vídeo: abrir no reprodutor e servir em streaming (Range) pelo esquema vpshub-media://.
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { callApi, dockerSh, fileList, launchApp, saveConnection, state } from './helpers.mjs'
+import { callApi, dockerSh, eventually, fileList, screenshot, launchApp, saveConnection, state } from './helpers.mjs'
 
 const S = state()
 const A = S.a
@@ -80,4 +80,41 @@ test('o esquema só serve mídia conhecida de VPS conectadas', async () => {
   assert.equal((await fetchMedia(url(`${DIR}/tom.wav`, 'id-que-nao-existe'))).status, 404, 'VPS desconhecida')
   assert.equal((await fetchMedia(url(`${DIR}/inexistente.wav`))).status, 500, 'arquivo inexistente não vaza dados')
   assert.equal((await fetchMedia(url(`${DIR}/../media/tom.wav`))).status, 200, 'caminho é normalizado')
+})
+
+// ---------- PDF ----------
+/** PDF de uma página com o texto "Ola PDF", com tabela xref correta. */
+function pdf() {
+  const stream = 'BT /F1 36 Tf 40 100 Td (Ola PDF) Tj ET'
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  ]
+  let out = '%PDF-1.4\n'
+  const offsets = objs.map((o, i) => {
+    const at = out.length
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`
+    return at
+  })
+  const xref = out.length
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return Buffer.from(out, 'latin1')
+}
+
+test('PDF abre no leitor do Chromium dentro do app', async () => {
+  const file = pdf()
+  sh(`echo '${file.toString('base64')}' | base64 -d > ${DIR}/doc.pdf`)
+  await win.getByRole('tab', { name: 'Arquivos' }).click()
+  await win.getByRole('button', { name: 'Atualizar (F5)' }).click()
+  await fileList(win).locator(`[data-path="${DIR}/doc.pdf"] [data-name-cell]`).dblclick()
+  await win.getByRole('tab', { name: /doc\.pdf/ }).waitFor()
+  await win.locator('iframe[title="doc.pdf"]').waitFor()
+  assert.equal((await fetchMedia(url(`${DIR}/doc.pdf`))).type, 'application/pdf')
+  // O leitor do Chromium carrega a página do PDF (o conteúdo fica num frame de outra origem).
+  await eventually(() => assert.ok(win.frames().some((f) => f.url().includes('doc.pdf') || f.url().startsWith('chrome-extension://'))))
+  await screenshot(win, 'pdf')
 })
