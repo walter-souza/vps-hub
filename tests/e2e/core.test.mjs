@@ -63,7 +63,7 @@ test('cria pasta com espaço e arquivo, edita e salva em UTF-8', async () => {
   await win.getByRole('option', { name: /app's\.js/ }).dblclick()
   await win.locator('.monaco-editor').waitFor({ timeout: 15_000 })
   await win.locator('.monaco-editor .view-lines').click()
-  await win.keyboard.type('console.log("olá VPS")')
+  await win.keyboard.insertText('console.log("olá VPS")') // um só evento: digitar tecla a tecla perde caracteres enquanto o Monaco carrega o serviço de JS
   await win.getByText('● Não salvo').waitFor()
   await win.keyboard.press('Control+s')
   await win.getByText('Salvo', { exact: true }).waitFor()
