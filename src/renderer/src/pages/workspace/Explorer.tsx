@@ -168,12 +168,15 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   const back = async () => {
     setView('files')
     const prev = hist.back.at(-1)
-    if (prev && (await load(prev))) setHist((h) => ({ back: h.back.slice(0, -1), fwd: [cwdRef.current, ...h.fwd] }))
+    // A pasta de origem é lida antes: o updater roda no render, quando cwdRef já aponta para o destino.
+    const from = cwdRef.current
+    if (prev && (await load(prev))) setHist((h) => ({ back: h.back.slice(0, -1), fwd: [from, ...h.fwd] }))
   }
   const forward = async () => {
     setView('files')
     const next = hist.fwd[0]
-    if (next && (await load(next))) setHist((h) => ({ back: [...h.back, cwdRef.current], fwd: h.fwd.slice(1) }))
+    const from = cwdRef.current
+    if (next && (await load(next))) setHist((h) => ({ back: [...h.back, from], fwd: h.fwd.slice(1) }))
   }
   const up = () => cwd !== '/' && navigate(parentPath(cwd))
 
@@ -821,7 +824,16 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
   )
 
   return (
-    <div className={`absolute inset-0 flex flex-col ${hidden ? 'hidden' : ''}`} onKeyDown={onKeyDown}>
+    <div
+      className={`absolute inset-0 flex flex-col ${hidden ? 'hidden' : ''}`}
+      onKeyDown={onKeyDown}
+      // Botões laterais do mouse (3 = voltar, 4 = avançar), como no Explorer do Windows e nos navegadores.
+      onMouseUp={(e) => {
+        if (e.button !== 3 && e.button !== 4) return
+        e.preventDefault()
+        return e.button === 3 ? back() : forward()
+      }}
+    >
       {/* Barra de navegação */}
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line bg-panel px-2">
         <NavButton

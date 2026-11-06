@@ -1,7 +1,7 @@
 // Favoritos por VPS: fixar pastas no Acesso rápido, persistir e usar como destino de arraste.
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { callApi, dockerSh, fileList, launchApp, saveConnection, state } from './helpers.mjs'
+import { callApi, dockerSh, eventually, fileList, launchApp, saveConnection, state } from './helpers.mjs'
 
 const S = state()
 const A = S.a
@@ -83,6 +83,21 @@ test('os favoritos persistem ao reabrir o app e remover pelo menu funciona', asy
   await win.getByRole('menuitem', { name: 'Remover dos favoritos' }).click()
   await favorite(`${DIR}/projeto`).waitFor({ state: 'detached' })
   assert.equal(await win.locator('[data-favorite]').count(), 1)
+})
+
+test('botões laterais do mouse voltam e avançam no histórico de pastas', async () => {
+  const side = (button) => fileList(win).evaluate((el, button) => el.dispatchEvent(new MouseEvent('mouseup', { button, bubbles: true, cancelable: true })), button)
+  await fileList(win, DIR).waitFor()
+  await row('projeto').locator('[data-name-cell]').dblclick()
+  await fileList(win, `${DIR}/projeto`).waitFor()
+  await side(3)
+  await fileList(win, DIR).waitFor()
+  await win.getByRole('button', { name: 'Avançar (Alt+→)' }).waitFor() // o histórico já foi atualizado
+  await eventually(() => win.getByRole('button', { name: 'Avançar (Alt+→)' }).isEnabled().then((ok) => assert.ok(ok)))
+  await side(4)
+  await fileList(win, `${DIR}/projeto`).waitFor()
+  await side(3)
+  await fileList(win, DIR).waitFor()
 })
 
 test('a API ignora caminhos inválidos e repetidos', async () => {
