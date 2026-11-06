@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowLeftRight, ChevronDown, FileImage, FolderOpen, Gauge, Plus, ScrollText, SquareTerminal, WifiOff, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { baseName, imageMime, mediaInfo } from '../../../../shared/paths'
+import type { LogSource } from '../../../../shared/types'
 import { Button } from '../../components/ui'
 import { api, errCode, errMsg } from '../../lib/api'
 import { connectVps } from '../../lib/connect'
@@ -10,6 +11,7 @@ import { toast, useApp } from '../../lib/store'
 import { EditorView, type OpenFile } from './EditorView'
 import { Explorer } from './Explorer'
 import { ImageView } from './ImageView'
+import { LiveLogView, logTitle } from './LiveLogView'
 import { LogView } from './LogView'
 import { Panel } from './Panel'
 import { MediaView } from './MediaView'
@@ -27,6 +29,8 @@ const PANEL = 'panel'
 const TRANSFERS = 'transfers'
 const viewerTab = (path: string) => `view:${path}`
 const logTab = (path: string) => `log:${path}`
+/** Um log ao vivo por fonte: abrir a mesma fonte de novo só traz a aba para a frente. */
+const liveKey = (s: LogSource) => `live:${JSON.stringify(s)}`
 
 export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   const session = useApp((s) => s.sessions[id])
@@ -42,6 +46,8 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
   const [viewers, setViewers] = useState<string[]>([])
   /** Abas de log: final de arquivos grandes demais para o editor, com atualização ao vivo. */
   const [logs, setLogs] = useState<string[]>([])
+  /** Abas de log ao vivo (journal, contêiner ou arquivo), cada uma com seu fluxo no servidor. */
+  const [live, setLive] = useState<LogSource[]>([])
   const [tab, setTab] = useState(EXPLORER)
   const [terms, setTerms] = useState<TermTab[]>([])
   const termSeq = useRef(0)
@@ -137,6 +143,17 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
     if (tab === logTab(path)) setTab(EXPLORER)
   }
 
+  const openLive = useCallback((source: LogSource) => {
+    const key = liveKey(source)
+    setLive((ls) => (ls.some((s) => liveKey(s) === key) ? ls : [...ls, source]))
+    setTab(key)
+  }, [])
+
+  const closeLive = (source: LogSource) => {
+    setLive((ls) => ls.filter((s) => s !== source))
+    if (tab === liveKey(source)) setTab(EXPLORER)
+  }
+
   const openTerminal = useCallback((cwd: string) => {
     const t = { id: crypto.randomUUID(), title: `Terminal ${++termSeq.current}`, cwd }
     setTerms((ts) => [...ts, t])
@@ -203,6 +220,9 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
           {logs.map((p) => (
             <Tab key={p} active={tab === logTab(p)} onClick={() => setTab(logTab(p))} icon={<ScrollText size={13} />} label={baseName(p)} title={`${p} (final do arquivo)`} onClose={() => closeLog(p)} />
           ))}
+          {live.map((s) => (
+            <Tab key={liveKey(s)} active={tab === liveKey(s)} onClick={() => setTab(liveKey(s))} icon={<ScrollText size={13} />} label={logTitle(s)} title="Log ao vivo" onClose={() => closeLive(s)} />
+          ))}
           {viewers.map((p) => (
             <Tab
               key={p}
@@ -248,6 +268,7 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
           hidden={tab !== EXPLORER}
           onOpenFile={openFile}
           onOpenTerminal={openTerminal}
+          onOpenLive={openLive}
         />
         {files
           .filter((f) => f.path === tab)
@@ -263,7 +284,10 @@ export function Workspace({ id, hidden }: { id: string; hidden: boolean }) {
               onOpenPath={(p) => openFile(p)}
             />
           ))}
-        <Panel vpsId={id} active={tab === PANEL && !hidden} closed={session.closed} />
+        <Panel vpsId={id} active={tab === PANEL && !hidden} closed={session.closed} onOpenLive={openLive} />
+        {live.map((s) => (
+          <LiveLogView key={liveKey(s)} vpsId={id} source={s} hidden={tab !== liveKey(s) || hidden} />
+        ))}
         {logs.filter((p) => logTab(p) === tab).map((p) => (
           <LogView key={p} vpsId={id} path={p} />
         ))}

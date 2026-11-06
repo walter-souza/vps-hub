@@ -7,8 +7,8 @@ import { exec, execAs, getSession, shellQuote, type Session } from './sessions'
  * próprio servidor (como root quando o modo sudo está ligado); nada é instalado na VPS.
  */
 
-const UNIT_RE = /^[\w@:.\\-]+\.service$/
-const CONTAINER_RE = /^[\w][\w.-]*$/
+export const UNIT_RE = /^[\w@:.\\-]+\.service$/
+export const CONTAINER_RE = /^[\w][\w.-]*$/
 const SERVICE_ACTIONS: ServiceAction[] = ['start', 'stop', 'restart', 'reload', 'enable', 'disable']
 const CONTAINER_ACTIONS: ContainerAction[] = ['start', 'stop', 'restart', 'remove']
 

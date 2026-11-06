@@ -1,6 +1,6 @@
 import { Box, Cog, Gauge, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { ServicesAvailability } from '../../../../shared/types'
+import type { LogSource, ServicesAvailability } from '../../../../shared/types'
 import { api } from '../../lib/api'
 import { Dashboard } from './Dashboard'
 import { DockerView, SystemdView } from './ServicePanels'
@@ -10,6 +10,7 @@ interface Props {
   /** A aba "Painel" está à frente: só então as leituras ao vivo rodam. */
   active: boolean
   closed: boolean
+  onOpenLive: (source: LogSource) => void
 }
 
 interface Section {
@@ -23,7 +24,7 @@ const SYSTEMD: Section = { id: 'systemd', label: 'Serviços', icon: Cog }
 const DOCKER: Section = { id: 'docker', label: 'Docker', icon: Box }
 
 /** Painel da VPS: o que o servidor está fazendo agora (além dos arquivos). Fica montado para guardar o histórico. */
-export function Panel({ vpsId, active, closed }: Props) {
+export function Panel({ vpsId, active, closed, onOpenLive }: Props) {
   const [section, setSection] = useState(OVERVIEW.id)
   const [available, setAvailable] = useState<ServicesAvailability | null>(null)
   const live = active && !closed
@@ -51,8 +52,8 @@ export function Panel({ vpsId, active, closed }: Props) {
       </nav>
       <div className="relative min-w-0 flex-1">
         {section === OVERVIEW.id && <Dashboard vpsId={vpsId} active={live} />}
-        {section === SYSTEMD.id && <SystemdView vpsId={vpsId} active={live} />}
-        {section === DOCKER.id && <DockerView vpsId={vpsId} active={live} />}
+        {section === SYSTEMD.id && <SystemdView vpsId={vpsId} active={live} onOpenLive={onOpenLive} />}
+        {section === DOCKER.id && <DockerView vpsId={vpsId} active={live} onOpenLive={onOpenLive} />}
       </div>
     </div>
   )

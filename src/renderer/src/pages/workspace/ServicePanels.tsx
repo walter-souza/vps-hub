@@ -1,6 +1,6 @@
-import { FileText, Play, RefreshCw, RotateCw, Square, Trash2 } from 'lucide-react'
+import { FileText, Play, RefreshCw, RotateCw, ScrollText, Square, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { ContainerInfo, ServiceUnit } from '../../../../shared/types'
+import type { ContainerInfo, LogSource, ServiceUnit } from '../../../../shared/types'
 import { Button } from '../../components/ui'
 import { api, errMsg } from '../../lib/api'
 import { confirm } from '../../lib/dialogs'
@@ -80,7 +80,7 @@ const inputClass = 'h-7 rounded-md border border-line bg-bg px-2 text-xs outline
 
 type UnitFilter = 'all' | 'active' | 'failed' | 'inactive'
 
-export function SystemdView({ vpsId, active }: { vpsId: string; active: boolean }) {
+export function SystemdView({ vpsId, active, onOpenLive }: { vpsId: string; active: boolean; onOpenLive: (source: LogSource) => void }) {
   const { items, error, reload } = useList(useCallback(() => api.services.listUnits(vpsId), [vpsId]), active)
   const [filter, setFilter] = useState('')
   const [state, setState] = useState<UnitFilter>('all')
@@ -135,6 +135,9 @@ export function SystemdView({ vpsId, active }: { vpsId: string; active: boolean 
           <option value="failed">Com falha</option>
           <option value="inactive">Inativos</option>
         </select>
+        <Button size="sm" variant="ghost" onClick={() => onOpenLive({ kind: 'journal' })} title="Acompanha o journal do sistema inteiro">
+          <ScrollText size={13} /> Journal ao vivo
+        </Button>
       </Toolbar>
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-left text-xs">
@@ -144,7 +147,7 @@ export function SystemdView({ vpsId, active }: { vpsId: string; active: boolean 
               <th className="px-3 py-1.5 font-medium">Estado</th>
               <th className="px-3 py-1.5 font-medium">No boot</th>
               <th className="px-3 py-1.5 font-medium">Descrição</th>
-              <th className="w-36 px-3 py-1.5" />
+              <th className="w-44 px-3 py-1.5" />
             </tr>
           </thead>
           <tbody>
@@ -164,6 +167,7 @@ export function SystemdView({ vpsId, active }: { vpsId: string; active: boolean 
                     <IconButton label={`Reiniciar ${u.name}`} icon={RotateCw} disabled={busy === u.name} onClick={() => act(u, 'restart', 'Reiniciar')} />
                     <IconButton label={`Parar ${u.name}`} icon={Square} disabled={busy === u.name || u.active === 'inactive'} onClick={() => act(u, 'stop', 'Parar')} danger />
                     <IconButton label={`Detalhes de ${u.name}`} icon={FileText} onClick={() => showDetails(u)} />
+                    <IconButton label={`Logs ao vivo de ${u.name}`} icon={ScrollText} onClick={() => onOpenLive({ kind: 'journal', unit: u.name })} />
                   </div>
                 </td>
               </tr>
@@ -195,7 +199,7 @@ export function SystemdView({ vpsId, active }: { vpsId: string; active: boolean 
 
 // ---------- Docker ----------
 
-export function DockerView({ vpsId, active }: { vpsId: string; active: boolean }) {
+export function DockerView({ vpsId, active, onOpenLive }: { vpsId: string; active: boolean; onOpenLive: (source: LogSource) => void }) {
   const { items, error, reload } = useList(useCallback(() => api.services.listContainers(vpsId), [vpsId]), active)
   const [filter, setFilter] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -243,7 +247,7 @@ export function DockerView({ vpsId, active }: { vpsId: string; active: boolean }
               <th className="px-3 py-1.5 font-medium">Imagem</th>
               <th className="px-3 py-1.5 font-medium">Estado</th>
               <th className="px-3 py-1.5 font-medium">Portas</th>
-              <th className="w-32 px-3 py-1.5" />
+              <th className="w-44 px-3 py-1.5" />
             </tr>
           </thead>
           <tbody>
@@ -267,6 +271,7 @@ export function DockerView({ vpsId, active }: { vpsId: string; active: boolean }
                     <IconButton label={`Iniciar ${c.name}`} icon={Play} disabled={busy === c.name || c.state === 'running'} onClick={() => act(c, 'start', 'Iniciar')} />
                     <IconButton label={`Reiniciar ${c.name}`} icon={RotateCw} disabled={busy === c.name} onClick={() => act(c, 'restart', 'Reiniciar')} />
                     <IconButton label={`Parar ${c.name}`} icon={Square} disabled={busy === c.name || c.state !== 'running'} onClick={() => act(c, 'stop', 'Parar')} danger />
+                    <IconButton label={`Logs ao vivo de ${c.name}`} icon={ScrollText} onClick={() => onOpenLive({ kind: 'docker', container: c.name })} />
                     <IconButton label={`Remover ${c.name}`} icon={Trash2} disabled={busy === c.name} onClick={() => act(c, 'remove', 'Remover')} danger />
                   </div>
                 </td>

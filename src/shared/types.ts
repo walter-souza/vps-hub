@@ -235,6 +235,9 @@ export interface ContainerInfo {
   createdAt: string
 }
 
+/** O que acompanhar ao vivo: journal do sistema (ou de um serviço), contêiner ou arquivo de log. */
+export type LogSource = { kind: 'journal'; unit?: string } | { kind: 'docker'; container: string } | { kind: 'file'; path: string }
+
 export interface ApiErrorShape {
   message: string
   code?: string
@@ -321,6 +324,13 @@ export interface VpsApi {
     cancel(transferId: string): Promise<void>
     /** Refaz uma transferência que falhou ou foi cancelada. */
     retry(transferId: string): Promise<void>
+  }
+  logs: {
+    /** Começa a enviar a saída (últimas linhas + novas) por onData; termina com onEnd. */
+    start(streamId: string, vpsId: string, source: LogSource): Promise<void>
+    stop(streamId: string): void
+    onData(cb: (streamId: string, chunk: string) => void): Unsubscribe
+    onEnd(cb: (streamId: string) => void): Unsubscribe
   }
   terminal: {
     open(termId: string, vpsId: string, cwd: string, cols: number, rows: number): Promise<void>

@@ -5,6 +5,7 @@ import type { Result } from '../shared/types'
 import { toApiError } from './errors'
 import * as files from './files'
 import { connectSession, disconnect, probe, testConnection } from './sessions'
+import { startLog, stopLog } from './logs'
 import * as services from './services'
 import { getStats } from './stats'
 import { setSudo } from './sudo'
@@ -91,6 +92,9 @@ export function registerIpc(): void {
   handle('trash:list', trash.list)
   handle('trash:restore', trash.restore)
   handle('trash:purge', trash.purge)
+
+  handle('logs:start', startLog)
+  ipcMain.on('logs:stop', (_e, streamId) => stopLog(streamId))
 
   handle('terminal:open', openTerminal)
   ipcMain.on('terminal:write', (_e, termId, data) => writeTerminal(termId, data))

@@ -78,6 +78,12 @@ const api: VpsApi = {
     cancel: (transferId) => invoke('transfers:cancel', transferId),
     retry: (transferId) => invoke('transfers:retry', transferId)
   },
+  logs: {
+    start: (streamId, vpsId, source) => invoke('logs:start', streamId, vpsId, source),
+    stop: (streamId) => ipcRenderer.send('logs:stop', streamId),
+    onData: (cb) => on('log:data', cb),
+    onEnd: (cb) => on('log:end', cb)
+  },
   terminal: {
     open: (termId, vpsId, cwd, cols, rows) => invoke('terminal:open', termId, vpsId, cwd, cols, rows),
     write: (termId, data) => ipcRenderer.send('terminal:write', termId, data),

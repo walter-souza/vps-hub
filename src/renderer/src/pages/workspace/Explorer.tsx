@@ -22,6 +22,7 @@ import {
   Loader2,
   Pencil,
   RefreshCw,
+  ScrollText,
   Search,
   ShieldAlert,
   ShieldCheck,
@@ -33,7 +34,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import { archiveInfo, baseName, joinPath, normalizePath, parentPath, validateName } from '../../../../shared/paths'
-import type { ExtractMode, FileEntry, PasteMode, SessionInfo, VpsConnection } from '../../../../shared/types'
+import type { ExtractMode, FileEntry, LogSource, PasteMode, SessionInfo, VpsConnection } from '../../../../shared/types'
 import { ContextMenu, type MenuEntry, type MenuState } from '../../components/ContextMenu'
 import { Button } from '../../components/ui'
 import { FileIcon } from '../../components/FileIcon'
@@ -57,6 +58,7 @@ interface Props {
   hidden: boolean
   onOpenFile: (path: string, line?: number) => void
   onOpenTerminal: (cwd: string) => void
+  onOpenLive: (source: LogSource) => void
 }
 
 /** Tipo próprio nos dados do arraste, para distinguir itens do app de arquivos vindos do Windows. */
@@ -68,7 +70,7 @@ type ItemRef = Pick<FileEntry, 'path' | 'name' | 'isDir'>
 const collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' })
 const COLS = 'grid grid-cols-[minmax(220px,1fr)_90px_130px_96px_90px]'
 
-export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal }: Props) {
+export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal, onOpenLive }: Props) {
   const id = vps.id
   const resolve = useCallback(
     (input: string, base: string) => {
@@ -442,6 +444,7 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
         { label: 'Renomear', icon: Pencil, shortcut: 'F2', onClick: () => rename(entry) },
         { label: 'Copiar caminho', icon: ClipboardCopy, onClick: () => copyPath(entry.path) }
       )
+      if (!entry.isDir) items.push({ label: 'Acompanhar ao vivo', icon: ScrollText, onClick: () => onOpenLive({ kind: 'file', path: entry.path }) })
       if (entry.isDir) {
         items.push(
           { label: 'Abrir terminal aqui', icon: SquareTerminal, onClick: () => onOpenTerminal(entry.path) },
