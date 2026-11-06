@@ -42,7 +42,8 @@ export async function waitForSsh(port, timeoutMs = 60_000) {
 
 /**
  * Abre o app com um perfil isolado. Os diálogos nativos são substituídos: a host key é aceita
- * (as mensagens ficam em globalThis.__boxes) e "escolher pasta" devolve downloadDir.
+ * (as mensagens ficam em globalThis.__boxes), "escolher pasta" devolve downloadDir e o aviso de
+ * arquivos não salvos ao fechar escolhe "Sair sem salvar".
  */
 export async function launchApp({ userData = tempDir('vpshub-ud-'), env = {}, downloadDir = tempDir('vpshub-dl-') } = {}) {
   const app = await electron.launch({
@@ -60,6 +61,11 @@ export async function launchApp({ userData = tempDir('vpshub-ud-'), env = {}, do
       return { response: 0 }
     }
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [dir] })
+    // Fechar o app com arquivo não salvo (ex.: depois de um teste que falhou) não pode travar a suíte.
+    dialog.showMessageBoxSync = (w, o) => {
+      globalThis.__boxes.push((o ?? w).message)
+      return 0
+    }
   }, downloadDir)
   return { app, win, errors, userData, downloadDir }
 }
