@@ -35,6 +35,10 @@ export interface SessionInfo {
   user: string
   home: string
   os: string
+  /** Login como root (o modo sudo não se aplica). */
+  root: boolean
+  /** Modo sudo ligado: operações rodam como administrador. */
+  sudo: boolean
 }
 
 export interface TestResult {
@@ -188,7 +192,11 @@ export interface VpsApi {
   session: {
     connect(id: string, secret?: string): Promise<SessionInfo>
     disconnect(id: string): Promise<void>
+    /** Liga/desliga o modo sudo. SECRET_REQUIRED = o sudo exige a senha (reenvie com password). */
+    setSudo(id: string, enabled: boolean, password?: string): Promise<SessionInfo>
     onClosed(cb: (id: string) => void): Unsubscribe
+    /** O modo sudo mudou sem pedido do usuário (ex.: o canal root caiu). */
+    onSudoChanged(cb: (info: SessionInfo) => void): Unsubscribe
   }
   fs: {
     list(id: string, path: string): Promise<FileEntry[]>

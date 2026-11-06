@@ -2,7 +2,7 @@ import { archiveInfo, baseName, joinPath, parentPath, type ArchiveKind } from '.
 import type { ArchiveFormat, ArchiveTool, ExtractMode, ToolInstallInfo } from '../shared/types'
 import { AppError } from './errors'
 import { remotePath, statOrNull } from './files'
-import { exec, getSession, sh, shellQuote as q, type Session } from './sessions'
+import { exec, execAs, getSession, sh, shellQuote as q, type Session } from './sessions'
 import { moveToTrash } from './trash'
 
 /** Flag de compressão do tar por tipo de arquivo. */
@@ -91,7 +91,7 @@ export async function compress(id: string, paths: string[], format: ArchiveForma
 async function listEntries(s: Session, archive: string, kind: ArchiveKind): Promise<string[]> {
   if (kind === 'zip') {
     await requireTool(s, 'unzip')
-    const { code, stdout, stderr } = await exec(s.client, `unzip -l ${q(archive)}`)
+    const { code, stdout, stderr } = await execAs(s, `unzip -l ${q(archive)}`)
     if (code !== 0) throw new AppError(`Não foi possível ler o arquivo: ${stderr.trim() || stdout.trim()}`)
     // Mesmo layout no Info-ZIP e no BusyBox: "<tamanho> <data> <hora> <nome>".
     return stdout
@@ -99,7 +99,7 @@ async function listEntries(s: Session, archive: string, kind: ArchiveKind): Prom
       .map((l) => l.match(/^\s*\d+\s+\S+\s+\S+\s+(.+)$/)?.[1])
       .filter((n): n is string => !!n)
   }
-  const { code, stdout, stderr } = await exec(s.client, `tar -t${TAR_FLAG[kind]}f ${q(archive)}`)
+  const { code, stdout, stderr } = await execAs(s, `tar -t${TAR_FLAG[kind]}f ${q(archive)}`)
   if (code !== 0) throw new AppError(`Não foi possível ler o arquivo: ${stderr.trim()}`)
   return stdout.split('\n').filter(Boolean)
 }

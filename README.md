@@ -35,6 +35,7 @@ App desktop para Windows que reúne suas VPS num só lugar e deixa você **naveg
 - **Busca** (Ctrl+F): por nome ou por conteúdo, na pasta e subpastas. Resultados de conteúdo mostram a linha e abrem o editor nela. Cancelável, até 500 resultados.
 - **Permissões e dono** (Alt+Enter): caixas ler/escrever/executar, valor numérico (755, 644, 600), troca de dono e grupo, aplicação recursiva só em pastas ou só em arquivos. Em seleção múltipla, bits diferentes aparecem como "misto" e só mudam se clicados.
 - **Compactar e extrair**: cria `.zip`/`.tar.gz`; extrai `.zip`, `.tar`, `.tar.gz`/`.tgz`, `.tar.bz2` e `.tar.xz` numa pasta nova ou na própria pasta. Se faltar o `zip` na VPS, o app mostra o comando de instalação e pode instalar para você (com root ou sudo sem senha).
+- **Modo sudo**: botão de escudo na barra (ou o aviso amarelo) liga o acesso como administrador; listar, ler, editar, enviar, baixar, excluir e mudar permissões passam a valer para arquivos do root. Funciona com sudo sem senha ou com senha (pedida na hora e guardada só na memória). Desligue quando terminar.
 - **Lixeira** em `~/.vpshub-trash` na VPS: Del manda para a lixeira (com Desfazer); dá para restaurar ao local original ou esvaziar. Shift+Del apaga de vez.
 
 ### Editor, terminal e transferências
@@ -75,7 +76,7 @@ npm run test:e2e   # testes de ponta a ponta (precisa do Docker Desktop rodando)
 
 ### Testes
 
-`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda **90 cenários**: conexão e host key, explorador, editor, transferências (cancelar e repetir), terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar entre VPS, seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
+`npm run test:e2e` gera o build, sobe dois servidores SSH descartáveis em Docker (portas 22220 e 22221), abre o app de verdade com Playwright e roda **101 cenários**: conexão e host key, explorador, editor, transferências (cancelar e repetir), terminal, queda de conexão, chave com passphrase, importação do `~/.ssh/config`, lixeira, compactar/extrair, copiar/colar entre VPS, seleção, arrastar e soltar (inclusive arquivos do Windows), permissões e busca (com BusyBox e GNU grep). Os containers são removidos ao final; use `VPSHUB_E2E_KEEP=1` para mantê-los.
 
 Para rodar só uma suíte (depois de `npm run build`):
 

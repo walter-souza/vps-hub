@@ -11,8 +11,15 @@ import { cleanFields, store } from './store'
 
 export interface Session {
   client: Client
+  /** SFTP em uso: o do usuário, ou o do root enquanto o modo sudo está ligado. */
   sftp: SFTPWrapper
+  userSftp: SFTPWrapper
+  rootSftp?: SFTPWrapper
+  /** uid efetivo (0 no modo sudo) e o uid real do login. */
   uid: number
+  realUid: number
+  /** Modo sudo ligado; a senha (se houver) só existe na memória. */
+  sudo?: { password?: string }
   info: SessionInfo
 }
 
@@ -162,10 +169,15 @@ async function openClient(f: VpsFields, secret: string | undefined): Promise<Cli
   })
 }
 
-export function exec(client: Client, cmd: string): Promise<{ stdout: string; stderr: string; code: number }> {
+/** Prefixo do sudo sem terminal: lê a senha da entrada padrão, ou falha se ela for necessária. */
+export const sudoPrefix = (password?: string) => (password === undefined ? 'sudo -n' : "sudo -S -p ''")
+
+/** stdin, se informado, é enviado ao comando (usado para a senha do sudo) e fechado em seguida. */
+export function exec(client: Client, cmd: string, stdin?: string): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
     client.exec(cmd, (err, stream) => {
       if (err) return reject(toAppError(err))
+      if (stdin !== undefined) stream.end(`${stdin}\n`)
       const out: Buffer[] = []
       const errOut: Buffer[] = []
       stream.on('data', (d: Buffer) => out.push(d))
@@ -177,9 +189,15 @@ export function exec(client: Client, cmd: string): Promise<{ stdout: string; std
   })
 }
 
-/** Roda um comando e lança AppError com o stderr se ele falhar. */
-export async function sh(s: Session, cmd: string, failure: string): Promise<void> {
-  const { code, stderr } = await exec(s.client, cmd)
+/** Como exec, mas como root quando o modo sudo está ligado. */
+export function execAs(s: Session, cmd: string): ReturnType<typeof exec> {
+  if (!s.sudo) return exec(s.client, cmd)
+  return exec(s.client, `${sudoPrefix(s.sudo.password)} sh -c ${shellQuote(cmd)}`, s.sudo.password)
+}
+
+/** Roda um comando e lança AppError com o stderr se ele falhar (como o usuário, se asUser). */
+export async function sh(s: Session, cmd: string, failure: string, asUser = false): Promise<void> {
+  const { code, stderr } = await (asUser ? exec(s.client, cmd) : execAs(s, cmd))
   if (code !== 0) throw new AppError(`${failure}: ${stderr.trim() || `código ${code}`}`)
 }
 
@@ -209,7 +227,7 @@ export function connectSession(id: string, secretOverride?: string): Promise<Ses
       const home = await new Promise<string>((res, rej) =>
         sftp.realpath('.', (e, path) => (e ? rej(toAppError(e)) : res(path)))
       )
-      const session: Session = { client, sftp, uid, info: { id, user, home, os } }
+      const session: Session = { client, sftp, userSftp: sftp, uid, realUid: uid, info: { id, user, home, os, root: uid === 0, sudo: false } }
       sessions.set(id, session)
       client.on('close', () => {
         if (sessions.get(id) !== session) return

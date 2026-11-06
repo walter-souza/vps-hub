@@ -5,6 +5,7 @@ import type { Result } from '../shared/types'
 import { toApiError } from './errors'
 import * as files from './files'
 import { connectSession, disconnect, probe, testConnection } from './sessions'
+import { setSudo } from './sudo'
 import { readSshConfig } from './sshConfig'
 import { store } from './store'
 import { compress, extract, installTool, toolInstallInfo } from './archive'
@@ -42,6 +43,7 @@ export function registerIpc(): void {
     store.remove(id)
   })
   handle('connections:setFavorites', (id, paths) => store.setFavorites(id, paths))
+  handle('session:setSudo', setSudo)
   handle('connections:test', testConnection)
   handle('connections:probe', probe)
   handle('connections:pickKeyFile', pickKeyFile)

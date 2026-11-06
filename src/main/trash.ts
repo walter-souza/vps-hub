@@ -4,7 +4,7 @@ import { baseName, joinPath, parentPath } from '../shared/paths'
 import type { TrashItem } from '../shared/types'
 import { AppError } from './errors'
 import { call, remotePath, statOrNull } from './files'
-import { exec, getSession, sh, shellQuote, type Session } from './sessions'
+import { execAs, getSession, sh, shellQuote, type Session } from './sessions'
 
 // Lixeira por VPS em ~/.vpshub-trash/<id>/, com o item e um arquivo de metadados com o caminho original.
 const TRASH_DIR = '.vpshub-trash'
@@ -42,14 +42,14 @@ export async function moveToTrash(s: Session, path: string): Promise<string> {
   const root = trashRoot(s)
   const trashId = `${Date.now()}-${randomBytes(3).toString('hex')}`
   const entry = joinPath(root, trashId)
-  await sh(s, `mkdir -p -- ${shellQuote(root)} && chmod 700 -- ${shellQuote(root)} && mkdir -- ${shellQuote(entry)}`, 'Falha ao criar a lixeira')
+  await sh(s, `mkdir -p -- ${shellQuote(root)} && chmod 700 -- ${shellQuote(root)} && mkdir -- ${shellQuote(entry)}`, 'Falha ao criar a lixeira', true) // como o usuário: a lixeira não pode ficar com dono root
   try {
     const meta = JSON.stringify({ path, deletedAt: Date.now() })
     await call((cb) => s.sftp.writeFile(joinPath(entry, META), meta, cb))
     // mv (e não rename do SFTP) para funcionar também entre sistemas de arquivos diferentes.
     await sh(s, `mv -- ${shellQuote(path)} ${shellQuote(joinPath(entry, baseName(path)))}`, `Falha ao mover "${baseName(path)}" para a lixeira`)
   } catch (e) {
-    await exec(s.client, `rm -rf -- ${shellQuote(entry)}`).catch(() => {})
+    await execAs(s, `rm -rf -- ${shellQuote(entry)}`).catch(() => {})
     throw e
   }
   return trashId

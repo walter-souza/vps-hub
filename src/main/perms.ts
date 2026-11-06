@@ -1,7 +1,7 @@
 import type { Accounts, PermChange } from '../shared/types'
 import { AppError } from './errors'
 import { remotePath } from './files'
-import { exec, getSession, shellQuote as q } from './sessions'
+import { exec, execAs, getSession, shellQuote as q } from './sessions'
 import { PROTECTED } from './trash'
 
 const NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,31}\$?$/ // nome de usuário/grupo ou id numérico
@@ -59,7 +59,7 @@ export async function changePermissions(id: string, paths: string[], change: Per
   // Continua nos demais itens se um falhar e reporta tudo no fim.
   const errors: string[] = []
   for (const cmd of commands) {
-    const { code, stderr } = await exec(s.client, cmd)
+    const { code, stderr } = await execAs(s, cmd)
     if (code !== 0) errors.push(...(stderr.trim() || `código ${code}`).split('\n'))
   }
   if (errors.length > 0) {

@@ -15,6 +15,10 @@ export function App() {
     const app = useApp.getState()
     api.connections.list().then(app.setConnections, (e) => toast('error', errMsg(e)))
     const offClosed = api.session.onClosed((id) => useApp.getState().sessionClosed(id))
+    const offSudo = api.session.onSudoChanged((info) => {
+      useApp.getState().sessionOpened(info)
+      toast('info', 'O modo sudo foi desativado: o canal de administrador foi encerrado.')
+    })
     const offProgress = api.transfers.onProgress((e) => useApp.getState().upsertTransfer(e))
 
     // Bloqueia o fechamento da janela com arquivos não salvos (o processo principal pergunta).
@@ -28,6 +32,7 @@ export function App() {
     window.addEventListener('drop', blockDrop)
     return () => {
       offClosed()
+      offSudo()
       offProgress()
       window.removeEventListener('beforeunload', beforeUnload)
       window.removeEventListener('dragover', blockDrop)

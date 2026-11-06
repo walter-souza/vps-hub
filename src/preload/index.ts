@@ -28,7 +28,9 @@ const api: VpsApi = {
   session: {
     connect: (id, secret) => invoke('session:connect', id, secret),
     disconnect: (id) => invoke('session:disconnect', id),
-    onClosed: (cb) => on('session:closed', cb)
+    setSudo: (id, enabled, password) => invoke('session:setSudo', id, enabled, password),
+    onClosed: (cb) => on('session:closed', cb),
+    onSudoChanged: (cb) => on('session:sudo', cb)
   },
   fs: {
     list: (id, path) => invoke('fs:list', id, path),

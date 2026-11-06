@@ -23,6 +23,7 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  ShieldAlert,
   ShieldCheck,
   SquareTerminal,
   Star,
@@ -34,8 +35,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { archiveInfo, baseName, joinPath, normalizePath, parentPath, validateName } from '../../../../shared/paths'
 import type { ExtractMode, FileEntry, PasteMode, SessionInfo, VpsConnection } from '../../../../shared/types'
 import { ContextMenu, type MenuEntry, type MenuState } from '../../components/ContextMenu'
+import { Button } from '../../components/ui'
 import { FileIcon } from '../../components/FileIcon'
 import { api, errCode, errMsg } from '../../lib/api'
+import { setSudo } from '../../lib/sudo'
 import { confirm, prompt } from '../../lib/dialogs'
 import { formatDate, formatSize } from '../../lib/format'
 import { toast, useApp } from '../../lib/store'
@@ -461,6 +464,19 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
     setMenu({ x: e.clientX, y: e.clientY, items })
   }
 
+  // ---------- Modo sudo ----------
+  const toggleSudo = async () => {
+    if (!info.sudo) {
+      const ok = await confirm({
+        title: 'Ativar o modo sudo?',
+        message: 'Enquanto estiver ligado, listar, editar, enviar, excluir e alterar permissões passam a valer para qualquer arquivo da VPS, como administrador. Desligue quando terminar.',
+        confirmLabel: 'Ativar'
+      })
+      if (!ok) return
+    }
+    if (await setSudo(vps, !info.sudo)) refresh()
+  }
+
   // ---------- Favoritos (por VPS) ----------
   const upsertConnection = useApp((s) => s.upsertConnection)
   const favorites = vps.favorites
@@ -834,7 +850,18 @@ export function Explorer({ vps, info, closed, hidden, onOpenFile, onOpenTerminal
         <NavButton label="Nova pasta (Ctrl+Shift+N)" onClick={() => newItem('dir')} icon={FolderPlus} />
         <NavButton label="Enviar arquivos" onClick={async () => upload(await api.fs.pickUpload())} icon={Upload} />
         <NavButton label={showHidden ? 'Ocultar arquivos ocultos' : 'Mostrar arquivos ocultos'} onClick={() => setShowHidden((v) => !v)} icon={showHidden ? Eye : EyeOff} />
+        {!info.root && <NavButton label={info.sudo ? 'Desativar modo sudo' : 'Ativar modo sudo'} onClick={toggleSudo} icon={ShieldAlert} active={info.sudo} />}
       </div>
+
+      {info.sudo && (
+        <div className="flex h-8 shrink-0 items-center gap-3 border-b border-amber-900 bg-amber-950/50 px-4 text-amber-200" role="status">
+          <ShieldAlert size={14} />
+          <span className="flex-1">Modo sudo ativo: as operações rodam como administrador.</span>
+          <Button size="sm" variant="ghost" onClick={toggleSudo}>
+            Desativar
+          </Button>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         {/* Acesso rápido */}
